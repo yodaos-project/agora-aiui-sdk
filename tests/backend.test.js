@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
-import { createSessionService } from '../examples/server/sessions.js';
+import { createSessionService, participantUids } from '../examples/server/sessions.js';
 import { createVoiceHandler, bearerAuthorizer } from '../examples/server/http.js';
 import { createAgoraAgentFactory } from '../examples/server/agora.js';
 import { createWhipToken } from '../examples/server/token.js';
@@ -13,6 +13,17 @@ import { deferred, fakeRuntime, tick } from './helpers.js';
 const credentials = { appId: '1'.repeat(32), certificate: '2'.repeat(32) };
 const demoToken = 'test-business-api-token-not-a-real-secret';
 const defaults = { ...credentials, baseURL: 'https://whip.example.test' };
+
+test('managed participant allocation respects the cloud agent UID limit at both boundaries', () => {
+  for (const seed of [1, 999_999_999]) {
+    const { uid, botUid } = participantUids(seed);
+    assert(uid > 0 && uid <= 2_147_483_647);
+    assert(botUid > 0 && botUid <= 2_147_483_647);
+    assert.notEqual(uid, botUid);
+  }
+  for (const seed of [0, 1_000_000_000, 2_000_000_000, NaN])
+    assert.throws(() => participantUids(seed), RangeError);
+});
 
 function service(options = {}) {
   const events = [];

@@ -14,6 +14,11 @@ Version **0.1.0** provides:
 - Direct connection with temporary credentials, or a managed session backend.
 - JavaScript modules, TypeScript declarations, a compact AIUI example and a Node backend example.
 
+**Live test status:** Cloud agent startup, speech recognition and LLM responses
+are verified. Cloud-agent audio did not reach the tested WHIP deployment, also
+reproduced in native Chrome without Ink. Full voice acceptance remains open;
+see [verification results](docs/validation.md#live-cloud-result-2026-10-27).
+
 The client has no runtime package dependencies. It uses Ink's `WHIPSession`,
 `RTCPeerConnection`, `AudioContext` and `navigator.mediaDevices` APIs. Use an Ink
 build containing [WHIP support](https://github.com/jsar-project/ink/pull/735).

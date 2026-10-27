@@ -14,6 +14,10 @@ SDK 负责麦克风采集、双向音频、静音、音量和连接状态。业�
 - 取消连接、立即停止采集、超时清理和后端会话租约。
 - JavaScript 模块、TypeScript 类型声明、眼镜尺寸的 AIUI 页面和参考后端。
 
+**当前实测状态：** 云端 Agent 启动、语音识别和 LLM 回答已验证；测试部署尚未向 WHIP
+客户端回传云端 Agent 音频。原生 Chrome 绕开 Ink 也能复现，完整语音验收仍待完成。
+详见[验证记录](docs/validation.md#live-cloud-result-2026-10-27)。
+
 客户端没有额外运行时依赖，使用 Ink 自带的 WHIP、WebRTC、Web Audio 和麦克风 API。
 需要包含 [WHIP 支持](https://github.com/jsar-project/ink/pull/735) 的 Ink 构建，
 并由宿主启用 WebRTC、允许录音。页面应保持在前台运行。

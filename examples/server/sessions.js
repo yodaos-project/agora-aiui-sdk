@@ -2,6 +2,14 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { agoraEndpoint } from '../../src/agora.js';
 import { createWhipToken } from './token.js';
 
+/** Use separate UID ranges within the cloud Agent API's signed 32-bit limit. */
+export function participantUids(uid = randomInt(1, 1_000_000_000)) {
+  if (!Number.isInteger(uid) || uid < 1 || uid >= 1_000_000_000) {
+    throw new RangeError('Client UID must be between 1 and 999999999.');
+  }
+  return { uid, botUid: uid + 1_000_000_000 };
+}
+
 export class ServiceError extends Error {
   constructor(status, code) {
     super(code);
@@ -100,13 +108,13 @@ export function createSessionService({
         throw new ServiceError(429, 'SESSION_LIMIT');
       }
       const id = randomUUID();
-      const uid = randomInt(1, 2_000_000_000);
+      const { uid, botUid } = participantUids();
       const record = {
         id,
         owner,
         channel: `aiui-${id}`,
         uid,
-        botUid: uid + 2_000_000_000,
+        botUid,
         expiresAt: now() + leaseMs,
         deadline: now() + maxDurationMs,
         closing: false,

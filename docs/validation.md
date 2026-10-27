@@ -53,6 +53,31 @@ Automated mock tests do not replace these steps:
 7. Interrupt startup and unload the page. Verify the backend reclaims the reservation/bot.
 8. Repeat on each target desktop, Android and Ink Web host.
 
-Initial delivery does not claim real-cloud Voice Agent audio verification without
-the project's pipeline configuration. Prior Ink-to-Ink WHIP audio tests verify the
-underlying transport, not this SDK's cloud bot lifecycle or audible AI responses.
+## Live cloud result: 2026-10-27
+
+With a published Studio pipeline, the managed backend successfully started and
+stopped real cloud agents. Cloud history confirmed recognition of the injected
+speech and generation of an assistant response. Capture and audio/RTC cleanup
+completed after the call.
+
+Full cloud voice acceptance is still **blocked on downlink interoperability** on
+the tested `ap-webrtc-whip.ap.sd-rtn.com` deployment:
+
+| Client                                                                  | Uplink / cloud processing      | Cloud agent audio received                          |
+| ----------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------- |
+| Ink Web running this SDK                                                | ASR and LLM response confirmed | 0 inbound RTP packets                               |
+| Native Chrome WHIP, without Ink or WHIPSession                          | ASR and LLM response confirmed | 0 inbound RTP packets                               |
+| Official Agora RTC SDK control receiver in the same respective channels | Received the WHIP publisher    | Received bot Opus packets and decoded speech energy |
+
+Both WHIP clients completed ICE/DTLS and negotiated `sendrecv`. Their native
+browser receiver tracks remained muted with no inbound audio RTP statistics.
+The RTC control measured the bot track separately, so its received audio was not
+confused with the WHIP publisher's microphone.
+
+This reproduces outside Ink and narrows the remaining issue to the tested
+gateway's cloud-agent downlink path or its required configuration. Provider
+confirmation is still needed; these results do not identify a specific server
+implementation defect. All test agents were stopped afterward.
+
+Earlier Ink-to-Ink WHIP audio tests establish a different interoperability path.
+Fresh Android/device voice acceptance for this SDK remains outstanding.

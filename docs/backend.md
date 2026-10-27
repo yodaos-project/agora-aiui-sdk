@@ -31,10 +31,18 @@ npm run example:server
 | `ALLOWED_ORIGINS`       | Comma-separated browser application origins allowed by CORS.                                                                 |
 | `HOST`, `PORT`          | Bind address; default `127.0.0.1:8787`.                                                                                      |
 
+To obtain `AGORA_PIPELINE_ID`, publish your voice agent in Agent Studio, then
+open **Agents → Action → Embed Agent** and copy `pipeline_id` from the generated
+code. See [Agora's embed instructions](https://docs.agora.io/en/ai/studio/deploy/connect-agent).
+The runtime allocates its own channel, UIDs and fresh tokens; you only need the
+published configuration ID from the embed snippet.
+
 The reference server uses `agora-agents@2.12.0`. It creates an `AgoraClient`, an
 `Agent` with `pipelineId`, and an `AgentSession`. Client and bot share a channel
 and use **different numeric UIDs**. The bot subscribes to the client's numeric UID.
 It starts only after the client's media connection is established.
+Both allocated UIDs stay below `2147483648`: the cloud Agent API imposes a
+signed 32-bit UID limit, which is narrower than the general RTC UID range.
 
 The demo token is shared across demo clients. Do not ship that shared privileged
 token in an application. Replace `bearerAuthorizer()` with your application's user
