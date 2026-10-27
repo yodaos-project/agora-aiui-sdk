@@ -1,0 +1,43 @@
+{
+  "name": "@yodaos-pkg/agora-aiui-sdk",
+  "version": "0.1.0",
+  "description": "Client SDK for AIUI voice agents using Agora WHIP and WebRTC",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:yodaos-project/agora-aiui-sdk",
+  "sideEffects": false,
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "workspaces": [
+    "examples/server"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:ink": "node scripts/test-ink.js",
+    "typecheck": "tsc -p tests/types/tsconfig.json",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "example:prepare": "node scripts/prepare-agent.js",
+    "example:server": "node --env-file=examples/server/.env examples/server/main.js",
+    "check": "npm run test && npm run typecheck && npm run format:check"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

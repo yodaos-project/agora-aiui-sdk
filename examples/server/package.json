@@ -1,0 +1,8 @@
+{
+  "name": "agora-aiui-sdk-reference-server",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "agora-agents": "2.12.0"
+  }
+}

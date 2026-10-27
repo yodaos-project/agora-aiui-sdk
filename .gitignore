@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.tgz
+coverage/
+examples/agent/lib/sdk/
+examples/agent/configuration.local.js
+.DS_Store
