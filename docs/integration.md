@@ -1,4 +1,4 @@
-# Add voice to your app
+# Add voice to your AIUI Agent
 
 [简体中文](zh/integration.md) · [All docs](README.md)
 
@@ -9,9 +9,9 @@ per call, start it from a user action, and stop it when the page closes.
 
 Choose the option that matches your project.
 
-### Ink app with local scripts
+### AIUI Agent with local scripts
 
-Copy all `.js` files from this repository's `src/` directory into your app's
+Copy all `.js` files from this repository's `src/` directory into your AIUI Agent's
 `lib/agora-voice/` directory. Keep the filenames and relative imports together.
 From a page under `pages/call/`, import:
 
@@ -40,7 +40,7 @@ The client runs inside an Ink host with the capabilities listed below.
 ## Connect your page
 
 Use the backend URL and `authorization()` configured in the
-[getting started guide](getting-started.md). For a released app, the function
+[getting started guide](getting-started.md). For a released AIUI Agent, the function
 should return your signed-in user's complete Authorization header, such as
 `Bearer <application-access-token>`. This authenticates your backend, not Agora.
 
@@ -147,7 +147,7 @@ cloud AI's lifetime.
   and `navigator.mediaDevices.getUserMedia`.
 - Declare `"permissions": ["RECORD_AUDIO"]` in `app.json` and allow microphone
   access in the host/operating system.
-- Open a full foreground app. Widget and list previews do not support calls.
+- Open a full foreground AIUI Agent. Widget and list previews do not support calls.
 - For standalone desktop testing, use `--networking-transport native` with `ink-open`.
 - For Ink Web, open the bundle with
   `hostOptions: { initialTarget: '_blank', initialFocus: 'focus' }` and have the
@@ -155,5 +155,5 @@ cloud AI's lifetime.
   HTTPS backend for deployment.
 
 Background audio depends on the host. If a window change pauses playback, bring
-the app forward and offer a tap to `resumeAudio()`. See [troubleshooting](troubleshooting.md)
+the AIUI Agent forward and offer a tap to `resumeAudio()`. See [troubleshooting](troubleshooting.md)
 for reading media and playback states separately.

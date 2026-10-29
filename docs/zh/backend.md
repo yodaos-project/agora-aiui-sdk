@@ -28,14 +28,14 @@
 
 Pipeline 提供语音识别、模型和声音配置。
 参考服务通过 [Agora 官方服务端 SDK](https://github.com/AgoraIO/agora-agents-ts)启停助手。
-官方服务端 SDK 放在后端，本项目的客户端 SDK 放在 Ink 应用中。
+官方服务端 SDK 放在后端，本项目的客户端 SDK 放在 AIUI Agent 中。
 
 ## 分清三个地址
 
 | 地址                  | 用来做什么                                        |
 | --------------------- | ------------------------------------------------- |
-| 你的后端地址          | 应用请求创建、启动、停止和续约会话。              |
-| `AGORA_WHIP_BASE_URL` | 应用与 Agora 建立实时音频连接。                   |
+| 你的后端地址          | AIUI Agent 请求创建、启动、停止和续约会话。       |
+| `AGORA_WHIP_BASE_URL` | AIUI Agent 与 Agora 建立实时音频连接。            |
 | Agora 云端 Agent API  | 后端请求启动、停止 AI，由 `AGORA_AREA` 选择区域。 |
 
 部署时，后端使用 HTTPS。客户端只允许在 localhost/回环地址使用 HTTP 做本地开发。
@@ -57,11 +57,11 @@ CORS 决定浏览器能否跨域访问，Authorization 仍负责验证每次会�
 
 三种凭证各有用途：
 
-| 凭证              | 谁发给谁          | 用途                                                       |
-| ----------------- | ----------------- | ---------------------------------------------------------- |
-| 应用登录凭证      | 应用 → 你的后端   | 允许用户操作自己的会话。私下测试使用 `BACKEND_API_TOKEN`。 |
-| WHIP JWT          | 应用 → Agora WHIP | 允许建立音频连接，由服务端签发临时提供给应用。             |
-| RTC/ConvoAI Token | 后端 → Agora      | 验证云端操作，以及 AI 参与者的频道身份。                   |
+| 凭证              | 谁发给谁                | 用途                                                       |
+| ----------------- | ----------------------- | ---------------------------------------------------------- |
+| 业务登录凭证      | AIUI Agent → 你的后端   | 允许用户操作自己的会话。私下测试使用 `BACKEND_API_TOKEN`。 |
+| WHIP JWT          | AIUI Agent → Agora WHIP | 允许建立音频连接，由服务端签发临时提供给 AIUI Agent。      |
+| RTC/ConvoAI Token | 后端 → Agora            | 验证云端操作，以及 AI 参与者的频道身份。                   |
 
 自己签发时，可以参考 `examples/server/token.js`。字符串模式的 WHIP JWT 包含
 `version`、`appID`、`streamID`、`exp`、`action: 'pub'` 和 `enableSubAuth: true`，
@@ -77,7 +77,7 @@ SDK 构建的双向 URL 不包含数字 `Uid` 参数。
 ## 使用自己的后端
 
 App Certificate 和模型 API Key 保留在服务端。
-将示例中的共享口令验证替换成应用的用户登录验证，并返回稳定的用户 ID。
+将示例中的共享口令验证替换成业务用户登录验证，并返回稳定的用户 ID。
 每次操作都应确认会话属于这个用户。
 
 实现下方 HTTP 接口后，可以直接使用 `createHttpVoiceBackend`。
@@ -86,7 +86,7 @@ App Certificate 和模型 API Key 保留在服务端。
 | 方法                                  | 负责什么                                             |
 | ------------------------------------- | ---------------------------------------------------- |
 | `createSession({ signal })`           | 预留凭证，返回 `{ id, whip, lease? }`，先不启动 AI。 |
-| `startAgent({ sessionId, signal })`   | 应用媒体连接完成后，启动 AI。                        |
+| `startAgent({ sessionId, signal })`   | AIUI Agent 的媒体连接完成后，启动 AI。               |
 | `stopSession({ sessionId, signal })`  | 停止 AI、释放预留会话，也要处理较晚才完成的启动。    |
 | `renewSession({ sessionId, signal })` | 返回 `{ lease }`。会话包含租约时必须实现。           |
 

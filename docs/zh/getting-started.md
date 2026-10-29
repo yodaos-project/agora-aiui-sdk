@@ -2,7 +2,7 @@
 
 [English](../getting-started.md) · [全部文档](README.md)
 
-这份指南使用项目自带的 Ink 应用和 Node.js 参考后端，带你完成一次“说话 → AI 回答”的测试。
+这份指南使用项目自带的 AIUI Agent 和 Node.js 参考后端，带你完成一次“说话 → AI 回答”的测试。
 建议先在同一台电脑上跑通，再尝试手机或眼镜。
 
 ## 1. 准备 Agora 和 Ink
@@ -37,7 +37,7 @@ npm ci
 npm run example:prepare
 ```
 
-`example:prepare` 会把客户端 SDK 复制到示例应用中，供 Ink 加载。
+`example:prepare` 会把客户端 SDK 复制到示例 AIUI Agent 中，供 Ink 加载。
 修改 SDK 源码后，需要重新执行这条命令。
 
 ## 3. 配置并启动后端
@@ -81,7 +81,7 @@ npm run example:server
 本次桌面测试将后端运行在你的电脑上。正式部署时，换成自己的 HTTPS 服务。
 音频直接在 Ink 与 Agora Cloud 之间传输。
 
-## 4. 为应用填写后端地址
+## 4. 为 AIUI Agent 填写后端地址
 
 将 `examples/agent/configuration.js` 改为：
 
@@ -95,10 +95,10 @@ export default {
 ```
 
 把 `Bearer ` 后面的占位内容替换成第 3 步的口令。
-这个共享口令只用于私下测试；发布应用时，需要换成应用自己的用户登录凭证。
+这个共享口令只用于私下测试；发布 AIUI Agent 时，需要换成业务用户登录凭证。
 不要在这里填写 Agora App Certificate，也不要提交已填写口令的文件；分享改动前恢复占位配置。
 
-## 5. 打开应用，开始说话
+## 5. 打开 AIUI Agent，开始说话
 
 确认 `ink-open` 已加入 PATH，在另一个终端的仓库根目录执行：
 
@@ -122,9 +122,9 @@ ink-open examples/agent --networking-transport native --permission-checks
 
 ## 换到其他宿主
 
-- **Ink Web**：以完整前台应用打开，允许录音，使用 HTTPS 后端。
+- **Ink Web**：以完整前台 AIUI Agent 打开，允许录音，使用 HTTPS 后端。
   在 `ALLOWED_ORIGINS` 中加入 Web 宿主页面的准确来源，见[宿主要求](integration.md#宿主要求)。
 - **Android 或眼镜**：部署设备可访问的 HTTPS 后端，再修改 `backendURL`。
   设备上的 `127.0.0.1` 指设备自己，不是你的电脑。
 
-遇到问题先看[常见问题](troubleshooting.md)。示例跑通后，再[接入自己的应用](integration.md)。
+遇到问题先看[常见问题](troubleshooting.md)。示例跑通后，再[接入自己的 AIUI Agent](integration.md)。

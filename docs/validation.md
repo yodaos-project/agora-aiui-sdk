@@ -3,7 +3,7 @@
 [简体中文](zh/validation.md) · [All docs](README.md)
 
 This page is for contributors and developers checking whether the SDK meets their
-app's needs. To run your first conversation, use [getting started](getting-started.md).
+AIUI Agent's needs. To run your first conversation, use [getting started](getting-started.md).
 
 ## Run local checks
 
@@ -22,7 +22,7 @@ timeouts, connection states, audio controls, lease renewal, HTTP authentication,
 response limits, and backend races. Official Agora server SDK requests are checked
 against a local mock endpoint, not the live cloud.
 
-`example:prepare` copies the client into the example app. `npm pack --dry-run`
+`example:prepare` copies the client into the example AIUI Agent. `npm pack --dry-run`
 lists package contents; server code and credentials must not be included.
 
 For documentation changes, keep English and Chinese pages aligned, check relative

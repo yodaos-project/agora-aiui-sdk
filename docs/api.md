@@ -150,7 +150,7 @@ const backend = createHttpVoiceBackend({
 | `baseURL`       | Your backend URL, optionally including a proxy prefix. Use HTTPS; loopback HTTP is allowed for development. |
 | `authorization` | A complete business Authorization header, or a sync/async function returning one for each request.          |
 | `timeout`       | Per-request deadline in milliseconds. Default: `15000`.                                                     |
-| `fetch`         | Optional application-provided Fetch function. Default: global `fetch`.                                      |
+| `fetch`         | Optional custom Fetch function. Default: global `fetch`.                                                    |
 
 This returns a `VoiceBackend`. The adapter uses the [HTTP contract](backend.md#http-contract),
 rejects redirects, and limits JSON responses to 64 KiB. It refreshes WHIP tokens

@@ -21,7 +21,7 @@ npm pack --dry-run
 租约续期、HTTP 认证、响应大小限制和后端并发场景。
 官方 Agora 服务端 SDK 的请求通过本地模拟接口验证，不访问真实云端。
 
-`example:prepare` 将客户端复制进示例应用。
+`example:prepare` 将客户端复制进示例 AIUI Agent。
 `npm pack --dry-run` 列出发布包内容，包中不应包含服务端代码或凭证。
 
 修改文档时，请同步中英文页面，检查相对链接和标题锚点，并对照当前 API 核对代码示例。

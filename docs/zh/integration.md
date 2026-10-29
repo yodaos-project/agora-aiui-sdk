@@ -1,4 +1,4 @@
-# 接入自己的应用
+# 接入自己的 AIUI Agent
 
 [English](../integration.md) · [全部文档](README.md)
 
@@ -9,9 +9,9 @@
 
 根据项目的脚本加载方式，选择一种。
 
-### 使用本地脚本的 Ink 应用
+### 使用本地脚本的 AIUI Agent
 
-把本仓库 `src/` 中所有 `.js` 文件复制到应用的 `lib/agora-voice/` 目录，
+把本仓库 `src/` 中所有 `.js` 文件复制到 AIUI Agent 的 `lib/agora-voice/` 目录，
 保留文件名和相对引用关系。在 `pages/call/` 中的页面可以这样导入：
 
 ```js
@@ -39,7 +39,7 @@ import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/ago
 ## 接入页面
 
 使用[入门指南](getting-started.md)中配置的后端地址和 `authorization()`。
-发布应用时，这个函数应返回已登录用户的完整 Authorization 请求头，例如
+发布 AIUI Agent 时，这个函数应返回已登录用户的完整 Authorization 请求头，例如
 `Bearer <application-access-token>`。这是访问业务后端的凭证，不是 Agora 凭证。
 
 下面的脚本适用于 `pages/call/` 中的页面。
@@ -139,11 +139,11 @@ await voice.start();
 - Ink 构建需要提供 `WHIPSession`、`RTCPeerConnection`、`AudioContext`
   和 `navigator.mediaDevices.getUserMedia`。
 - 在 `app.json` 中声明 `"permissions": ["RECORD_AUDIO"]`，并在宿主或系统中允许录音。
-- 以完整前台应用打开，Widget 和列表预览不支持通话。
+- 以完整前台 AIUI Agent 打开，Widget 和列表预览不支持通话。
 - 使用独立桌面程序 `ink-open` 测试时，指定 `--networking-transport native`。
 - Ink Web 打开 bundle 时使用
   `hostOptions: { initialTarget: '_blank', initialFocus: 'focus' }`，
   并由宿主处理麦克风权限请求。部署时使用安全的 Web 来源和 HTTPS 后端。
 
-后台音频行为由宿主决定。如果切换窗口后播放暂停，请将应用带回前台，并提供调用
+后台音频行为由宿主决定。如果切换窗口后播放暂停，请将 AIUI Agent 带回前台，并提供调用
 `resumeAudio()` 的按钮。如何分别判断媒体连接与播放状态，见[常见问题](troubleshooting.md)。

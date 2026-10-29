@@ -33,7 +33,7 @@ for ongoing calls. See [Agora's embed guide](https://docs.agora.io/en/ai/studio/
 The pipeline supplies the speech recognition, language model, and voice settings.
 The reference server uses the official [Agora server SDK](https://github.com/AgoraIO/agora-agents-ts)
 to start and stop it. That server SDK belongs on the backend; this project's client
-SDK belongs in your Ink app.
+SDK belongs in your AIUI Agent.
 
 ## Choose the right addresses
 
@@ -41,8 +41,8 @@ There are three separate destinations:
 
 | Address               | Used for                                                             |
 | --------------------- | -------------------------------------------------------------------- |
-| Your backend URL      | App requests for session setup, start, stop, and renewal.            |
-| `AGORA_WHIP_BASE_URL` | The app's real-time audio connection to Agora.                       |
+| Your backend URL      | AIUI Agent requests for session setup, start, stop, and renewal.     |
+| `AGORA_WHIP_BASE_URL` | The AIUI Agent's real-time audio connection to Agora.                |
 | Agora cloud Agent API | Backend requests to start and stop the AI, selected by `AGORA_AREA`. |
 
 For deployment, use HTTPS for your backend. The client permits HTTP only on
@@ -67,15 +67,15 @@ exact client account in `remote_rtc_uids`.
 
 Three credentials serve different purposes:
 
-| Credential              | Sent by            | Purpose                                                                                 |
-| ----------------------- | ------------------ | --------------------------------------------------------------------------------------- |
-| Application login token | App → your backend | Authorize your user's session operations. The private demo uses `BACKEND_API_TOKEN`.    |
-| WHIP JWT                | App → Agora WHIP   | Authorize the audio connection. The server signs it and gives the app a temporary copy. |
-| RTC/ConvoAI token       | Backend → Agora    | Authenticate cloud operations and the AI participant's channel identity.                |
+| Credential           | Sent by                   | Purpose                                                                                        |
+| -------------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
+| Business login token | AIUI Agent → your backend | Authorize your user's session operations. The private demo uses `BACKEND_API_TOKEN`.           |
+| WHIP JWT             | AIUI Agent → Agora WHIP   | Authorize the audio connection. The server signs it and gives the AIUI Agent a temporary copy. |
+| RTC/ConvoAI token    | Backend → Agora           | Authenticate cloud operations and the AI participant's channel identity.                       |
 
 For a custom signer, follow `examples/server/token.js`: the string-mode WHIP JWT
 has `version`, `appID`, `streamID`, `exp`, `action: 'pub'`, and `enableSubAuth: true`.
-It omits `uid`; the app's account travels in the URL's `stringuid` parameter.
+It omits `uid`; the AIUI Agent's account travels in the URL's `stringuid` parameter.
 Sign HS256 with the certificate's text value, not hex-decoded bytes.
 The SDK constructs the duplex URL without a numeric `Uid` parameter.
 
@@ -89,7 +89,7 @@ string-account reservations.
 ## Use your own backend
 
 Keep App Certificates and model API keys on the server. Replace the demo's shared
-token authorizer with your application's user authentication, returning a stable
+token authorizer with your user authentication, returning a stable
 user ID. Check that user owns the session on every operation.
 
 Use `createHttpVoiceBackend` if you implement the HTTP contract below. If your
@@ -99,7 +99,7 @@ service already has another API, implement the `VoiceBackend` methods from
 | Method                                | Responsibility                                                                   |
 | ------------------------------------- | -------------------------------------------------------------------------------- |
 | `createSession({ signal })`           | Reserve credentials and return `{ id, whip, lease? }`. Do not start the AI yet.  |
-| `startAgent({ sessionId, signal })`   | Start the AI after the app's media is connected.                                 |
+| `startAgent({ sessionId, signal })`   | Start the AI after the AIUI Agent's media is connected.                          |
 | `stopSession({ sessionId, signal })`  | Stop the AI and release the reservation. Also handle a start that finishes late. |
 | `renewSession({ sessionId, signal })` | Return `{ lease }`. Required if reservations include a lease.                    |
 

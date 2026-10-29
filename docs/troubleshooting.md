@@ -12,7 +12,7 @@ For a managed call, look for `media: connected`, `agent: running`, and
 `audio: running`. These describe different parts of the call. They do not alone
 prove that the AI's reply is audible.
 
-## The app cannot connect
+## The AIUI Agent cannot connect
 
 | Symptom                 | First checks                                                                                                                   |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -50,7 +50,7 @@ cloud conversation history. Packet counts alone do not confirm audible speech.
 
 Check `audio` and `media` at the moment it stops:
 
-- **`audio: suspended`:** the host has paused local audio. Bring the app forward
+- **`audio: suspended`:** the host has paused local audio. Bring the AIUI Agent forward
   and resume from a tap. The media connection can remain connected during this pause.
 - **`media: disconnected`:** the media path has been interrupted. Wait for recovery;
   a terminal failure ends the session. Start a new session to retry afterward.
@@ -71,7 +71,7 @@ limits, adjust your backend policy and cloud configuration.
 
 ## Do I need a backend running on my computer?
 
-Only for the local reference setup. A deployed app uses your HTTPS service.
+Only for the local reference setup. A deployed AIUI Agent uses your HTTPS service.
 If another system already starts the AI and issues temporary credentials,
 [direct mode](integration.md#use-existing-temporary-credentials) connects without
 a session backend at runtime. Keep signing certificates off the client.

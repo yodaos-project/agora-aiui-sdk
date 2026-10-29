@@ -1,21 +1,21 @@
 # Agora AIUI SDK
 
-**Give your Ink app a voice. Build an AI assistant people can talk to.**
+**Give your AIUI Agent a voice. Build an AI assistant people can talk to.**
 
 [![Checks](https://github.com/yodaos-project/agora-aiui-sdk/actions/workflows/check.yml/badge.svg)](https://github.com/yodaos-project/agora-aiui-sdk/actions/workflows/check.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
 
-[Get started](docs/getting-started.md) · [Documentation](docs/README.md) · [Example app](examples/agent) · [API](docs/api.md)
+[Get started](docs/getting-started.md) · [Documentation](docs/README.md) · [Example AIUI Agent](examples/agent) · [API](docs/api.md)
 
 ## What is a Voice Agent?
 
 A Voice Agent is an AI assistant you speak to. You ask a question through a
 microphone; it understands your words, prepares a response, and speaks back.
-It brings a conversation to your app without asking people to type or read a screen.
+It brings a conversation to your AIUI Agent without asking people to type or read a screen.
 
-With this SDK, your [Ink](https://github.com/jsar-project/ink) app captures your
+With this SDK, your AIUI Agent running on [Ink](https://github.com/jsar-project/ink) captures your
 voice and plays the reply. Agora's cloud Voice Agent handles speech recognition,
 the language model, and speech synthesis. You choose those services in Agora
 Agent Studio.
@@ -67,7 +67,7 @@ Agora, start the reference backend, and open the example in Ink. It walks throug
 where to find each value, including `pipelineId`.
 
 Your first milestone: tap **连接** (Connect), speak, hear the AI answer, then tap
-**结束** (End). Keep the app in the foreground during the call.
+**结束** (End). Keep the AIUI Agent in the foreground during the call.
 
 ## A call in JavaScript
 
@@ -77,8 +77,8 @@ For a project with an npm bundler, install from GitHub:
 npm install github:yodaos-project/agora-aiui-sdk
 ```
 
-Once your backend and app configuration are ready, start a call like this.
-Ink apps that load local scripts can [copy the SDK files instead](docs/integration.md#ink-app-with-local-scripts).
+Once your backend and AIUI Agent configuration are ready, start a call like this.
+AIUI Agents that load local scripts can [copy the SDK files instead](docs/integration.md#aiui-agent-with-local-scripts).
 
 ```js
 import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/agora-aiui-sdk';
@@ -100,23 +100,23 @@ await voice.start();
 ```
 
 Call `voice.stop()` from your End button and page unload handler. Create a new
-session for the next call. See [add voice to your app](docs/integration.md) for
+session for the next call. See [add voice to your AIUI Agent](docs/integration.md) for
 installation, page lifecycle, and audio controls.
 
 ## How the pieces fit together
 
-| Piece                   | Responsibility                                              |
-| ----------------------- | ----------------------------------------------------------- |
-| Your Ink app + this SDK | Capture speech, play replies, and show call controls.       |
-| Your session backend    | Issue temporary credentials and start/stop the cloud agent. |
-| Agora Cloud             | Carry the audio and run the configured AI conversation.     |
+| Piece                      | Responsibility                                              |
+| -------------------------- | ----------------------------------------------------------- |
+| Your AIUI Agent + this SDK | Capture speech, play replies, and show call controls.       |
+| Your session backend       | Issue temporary credentials and start/stop the cloud agent. |
+| Agora Cloud                | Carry the audio and run the configured AI conversation.     |
 
 Audio travels directly between Ink and Agora Cloud. The session backend handles
 setup and cleanup. The included Node.js backend is a starting point for your own
 service; you can also [connect with existing credentials](docs/integration.md#use-existing-temporary-credentials).
 
 Keep the **App Certificate and model API keys on the server**. The reference
-backend configures distinct **string UIDs** for the app and AI, as required by
+backend configures distinct **string UIDs** for the AIUI Agent and cloud AI, as required by
 this cloud voice integration.
 
 ## Documentation
@@ -124,7 +124,7 @@ this cloud voice integration.
 | I want to…                                                | Read                                               |
 | --------------------------------------------------------- | -------------------------------------------------- |
 | Have my first conversation                                | [Getting started](docs/getting-started.md)         |
-| Add voice to an existing app                              | [Integration guide](docs/integration.md)           |
+| Add voice to an existing AIUI Agent                       | [Integration guide](docs/integration.md)           |
 | Configure Agora or use my own backend                     | [Backend guide](docs/backend.md)                   |
 | Look up a method or option                                | [API reference](docs/api.md)                       |
 | Fix silence, a failed connection, or interrupted playback | [Troubleshooting](docs/troubleshooting.md)         |

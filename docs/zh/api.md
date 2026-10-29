@@ -2,7 +2,7 @@
 
 [English](../api.md) · [全部文档](README.md)
 
-完整页面用法见[应用接入](integration.md)。这里介绍公开的客户端 API；
+完整页面用法见[AIUI Agent 接入](integration.md)。这里介绍公开的客户端 API；
 TypeScript 类型定义见 [src/index.d.ts](../../src/index.d.ts)。
 
 ## 创建会话
@@ -139,7 +139,7 @@ const backend = createHttpVoiceBackend({
 | `baseURL`       | 后端地址，可含代理前缀。使用 HTTPS，本地开发允许回环 HTTP。         |
 | `authorization` | 完整的业务 Authorization 请求头，或每次请求同步、异步返回它的函数。 |
 | `timeout`       | 单次请求超时，单位毫秒，默认 `15000`。                              |
-| `fetch`         | 可选的应用 Fetch 函数，默认使用全局 `fetch`。                       |
+| `fetch`         | 可选的自定义 Fetch 函数，默认使用全局 `fetch`。                     |
 
 返回实现 `VoiceBackend` 的对象，使用[后端 HTTP 接口](backend.md#http-接口)，
 拒绝重定向，JSON 响应上限为 64 KiB。
@@ -151,17 +151,17 @@ const backend = createHttpVoiceBackend({
 启动失败会使 `start()` 拒绝；通话中的失败通过 `statechange` 和 `getState().error` 通知。
 构造或配置参数无效时，也可能抛出普通 JavaScript 错误。
 
-| 错误码          | 检查什么                         |
-| --------------- | -------------------------------- |
-| `UNSUPPORTED`   | Ink 宿主是否提供所需能力。       |
-| `CONFIGURATION` | 连接字段和临时凭证。             |
-| `BACKEND`       | 后端网络、认证和响应。           |
-| `MICROPHONE`    | 录音权限、麦克风是否可用。       |
-| `AUDIO`         | 是否已允许播放、应用是否在前台。 |
-| `MEDIA`         | WHIP/RTC 连接与网络。            |
-| `AGENT`         | 后端启动云端 AI 的过程。         |
-| `TIMEOUT`       | 启动超时、网络或服务是否可用。   |
-| `ABORTED`       | 启动被取消。                     |
-| `LEASE`         | 后端会话续约失败。               |
+| 错误码          | 检查什么                                |
+| --------------- | --------------------------------------- |
+| `UNSUPPORTED`   | Ink 宿主是否提供所需能力。              |
+| `CONFIGURATION` | 连接字段和临时凭证。                    |
+| `BACKEND`       | 后端网络、认证和响应。                  |
+| `MICROPHONE`    | 录音权限、麦克风是否可用。              |
+| `AUDIO`         | 是否已允许播放、AIUI Agent 是否在前台。 |
+| `MEDIA`         | WHIP/RTC 连接与网络。                   |
+| `AGENT`         | 后端启动云端 AI 的过程。                |
+| `TIMEOUT`       | 启动超时、网络或服务是否可用。          |
+| `ABORTED`       | 启动被取消。                            |
+| `LEASE`         | 后端会话续约失败。                      |
 
 排查顺序见[常见问题](troubleshooting.md)。

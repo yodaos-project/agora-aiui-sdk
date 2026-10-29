@@ -2,7 +2,7 @@
 
 [简体中文](zh/getting-started.md) · [All docs](README.md)
 
-This guide runs the included Ink app with the reference Node.js backend.
+This guide runs the included AIUI Agent with the reference Node.js backend.
 By the end, you can speak into your microphone and hear an AI answer.
 Start on one computer before trying a phone or glasses.
 
@@ -40,7 +40,7 @@ npm ci
 npm run example:prepare
 ```
 
-`example:prepare` copies the client SDK into the example app so Ink can load it.
+`example:prepare` copies the client SDK into the example AIUI Agent so Ink can load it.
 Run it again after changing the SDK source.
 
 ## 3. Configure and start the backend
@@ -85,7 +85,7 @@ The default address is `http://127.0.0.1:8787`.
 For this desktop test, the backend runs on your computer. For deployment, use
 your own HTTPS service. Audio goes directly between Ink and Agora Cloud.
 
-## 4. Point the app at the backend
+## 4. Point the AIUI Agent at the backend
 
 Replace `examples/agent/configuration.js` with:
 
@@ -99,11 +99,10 @@ export default {
 ```
 
 Replace the text after `Bearer ` with the token from step 3. This shared token is
-for private development only. For a released app, use your application's user
-login instead. Never put the Agora App Certificate in this file or commit your
+for private development only. For a released AIUI Agent, use your user login flow instead. Never put the Agora App Certificate in this file or commit your
 configured file. Restore the placeholder before sharing changes.
 
-## 5. Open the app and talk
+## 5. Open the AIUI Agent and talk
 
 In another terminal, from the repository root, with `ink-open` available on your PATH:
 
@@ -129,11 +128,11 @@ moving meters are useful checks, but do not replace listening.
 
 ## Use another host
 
-- **Ink Web:** open the app as a foreground app, allow microphone permission,
+- **Ink Web:** open the AIUI Agent in the foreground, allow microphone permission,
   and use an HTTPS session backend. Add the Web host page's exact origin to
   `ALLOWED_ORIGINS`. See [host requirements](integration.md#host-requirements).
 - **Android or glasses:** deploy a reachable HTTPS backend and change
   `backendURL`. `127.0.0.1` on the device refers to the device itself, not your computer.
 
 If something fails, start with [troubleshooting](troubleshooting.md). Once the
-example works, [add voice to your own app](integration.md).
+example works, [add voice to your own AIUI Agent](integration.md).
