@@ -14,10 +14,10 @@ Version **0.1.0** provides:
 - Direct connection with temporary credentials, or a managed session backend.
 - JavaScript modules, TypeScript declarations, a compact AIUI example and a Node backend example.
 
-**Live test status:** Cloud agent startup, speech recognition and LLM responses
-are verified. Cloud-agent audio did not reach the tested WHIP deployment, also
-reproduced in native Chrome without Ink. Full voice acceptance remains open;
-see [verification results](docs/validation.md#live-cloud-result-2026-10-27).
+**Live test status:** Use string UIDs consistently for the client and cloud agent.
+The earlier numeric-UID tests did not receive AI audio. See the current
+[verification results](docs/validation.md#string-uid-correction-2026-10-29) for the
+host and conversation checks completed with string accounts.
 
 The client has no runtime package dependencies. It uses Ink's `WHIPSession`,
 `RTCPeerConnection`, `AudioContext` and `navigator.mediaDevices` APIs. Use an Ink
@@ -106,8 +106,7 @@ const voice = createAgoraVoiceSession({
   connection: {
     baseURL: 'https://ap-webrtc-whip.ap.sd-rtn.com',
     channel: 'your-channel',
-    uid: 10001,
-    stringUid: 'aiui-client-10001',
+    uid: 'aiui-client-10001',
     token: 'temporary-whip-jwt-from-your-trusted-service',
   },
 });
@@ -116,9 +115,12 @@ await voice.start();
 await voice.stop();
 ```
 
-The JWT must authorize the same channel and **numeric UID**. Each participant,
-including the bot, needs a different numeric UID. `stringUid` is an additional
-gateway alias. This SDK targets Agora's duplex WHIP extension; standard ingest-only
+The JWT must authorize the same channel. For cloud AI, use a **string UID**, send
+it as the WHIP `stringuid` query parameter, and configure the cloud agent with
+`enable_string_uid: true`. The agent's `remote_rtc_uids` must contain that exact
+client string; its own `agent_rtc_uid` must be a different string account.
+In this mode the WHIP URL has no numeric `Uid`, and the WHIP JWT omits `uid`.
+This SDK targets Agora's duplex WHIP extension; standard ingest-only
 WHIP services cannot provide the downlink required for a voice conversation.
 
 For longer calls, use a token callback that obtains a fresh JWT when needed.

@@ -47,7 +47,7 @@ export default {
       const stream = await original(options); captured.push(stream); return stream;
     };
     const voice = createAgoraVoiceSession({ connection: {
-      baseURL: 'https://whip.example.test', channel: 'runtime-probe', uid: 10001,
+      baseURL: 'https://whip.example.test', channel: 'runtime-probe', uid: 'aiui-runtime-probe',
       token: () => { throw new Error('Intentional pre-network cancellation.'); },
     }, timeout: 10000 });
     voice.addEventListener('statechange', () => this.postMessage({ progress: voice.getState() }));

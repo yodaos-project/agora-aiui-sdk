@@ -25,8 +25,7 @@ JWT, SDP or backend response body. The SDK does not write diagnostic logs.
 {
   baseURL: 'https://ap-webrtc-whip.ap.sd-rtn.com',
   channel: 'your-channel',
-  uid: 10001,
-  stringUid: 'optional-client-alias',
+  uid: 'aiui-client-10001',
   token: async () => 'fresh-raw-whip-jwt',
   rtcConfiguration: { bundlePolicy: 'max-bundle' },
 }
@@ -34,13 +33,19 @@ JWT, SDP or backend response body. The SDK does not write diagnostic logs.
 
 - `baseURL`: HTTPS origin only. Do not include `/pub`, credentials, query or fragment.
 - `channel`: nonempty, at most 64 characters; use a channel name accepted by your Agora deployment.
-- `uid`: integer from 1 through 4294967294, matching the JWT `uid` claim.
-- `stringUid`: optional alias, default `aiui-${uid}`.
+- `uid`: a string account of 1–255 UTF-8 bytes. Use the same account in the cloud
+  agent's `remote_rtc_uids`, with `enable_string_uid: true`. Each participant needs
+  a different account. Numeric UIDs from 1 through 4294967294 remain available for
+  existing direct-mode integrations; the managed cloud AI example uses strings.
+- `stringUid`: optional legacy alias for numeric mode, default `aiui-${uid}`.
+  If provided in string mode it must equal `uid`; it cannot override the identity.
 - `token`: raw JWT string or a function returning one. Do not include `Bearer `.
 - `rtcConfiguration`: optional standard peer connection configuration.
 
-`agoraEndpoint(connection)` returns the encoded duplex URL. Its numeric query
-parameter is `Uid`, with an uppercase `U`.
+`agoraEndpoint(connection)` returns the encoded duplex URL. A string `uid` produces
+`?stringuid=...&duplex=true`, without a numeric `Uid` parameter. The reference signer
+omits `uid` from the WHIP JWT in string mode. Legacy numeric mode sends both
+`stringuid` and case-sensitive `Uid`, with the numeric JWT identity matching `Uid`.
 
 ## Start and stop
 

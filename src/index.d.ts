@@ -30,8 +30,9 @@ export interface AgoraConnection {
   /** HTTPS origin of an Agora duplex WHIP deployment. */
   baseURL: string;
   channel: string;
-  /** Numeric RTC UID, matching uid in the WHIP JWT. */
-  uid: number;
+  /** RTC string account (recommended for cloud AI) or a legacy numeric UID. */
+  uid: string | number;
+  /** Optional alias for numeric mode. In string mode it must equal uid. */
   stringUid?: string;
   /** Raw WHIP JWT, without the Bearer prefix. The callback can refresh it for DELETE. */
   token: string | (() => string | Promise<string>);

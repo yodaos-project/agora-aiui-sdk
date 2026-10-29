@@ -60,8 +60,9 @@ stopped real cloud agents. Cloud history confirmed recognition of the injected
 speech and generation of an assistant response. Capture and audio/RTC cleanup
 completed after the call.
 
-Full cloud voice acceptance is still **blocked on downlink interoperability** on
-the tested `ap-webrtc-whip.ap.sd-rtn.com` deployment:
+These historical tests used numeric UIDs. Their downlink failure was corrected
+by using consistent string accounts; see the 2026-10-29 results below. At the time,
+the tested `ap-webrtc-whip.ap.sd-rtn.com` deployment produced:
 
 | Client                                                                  | Uplink / cloud processing      | Cloud agent audio received                          |
 | ----------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------- |
@@ -74,10 +75,47 @@ browser receiver tracks remained muted with no inbound audio RTP statistics.
 The RTC control measured the bot track separately, so its received audio was not
 confused with the WHIP publisher's microphone.
 
-This reproduces outside Ink and narrows the remaining issue to the tested
-gateway's cloud-agent downlink path or its required configuration. Provider
-confirmation is still needed; these results do not identify a specific server
-implementation defect. All test agents were stopped afterward.
+This reproduced outside Ink, but did not establish a server defect. Agora later
+confirmed that this integration requires string UIDs. Sending both `stringuid`
+and a numeric `Uid` while setting `enable_string_uid: false` did not satisfy that
+requirement. All test agents were stopped afterward.
 
 Earlier Ink-to-Ink WHIP audio tests establish a different interoperability path.
 Fresh Android/device voice acceptance for this SDK remains outstanding.
+
+## String UID correction: 2026-10-29
+
+Following Agora's feedback, the managed example now allocates distinct string
+accounts for Ink and the cloud AI:
+
+- WHIP sends only `stringuid=<client account>&duplex=true`, without numeric `Uid`.
+- The string-mode WHIP JWT authorizes the channel and omits the numeric `uid` claim.
+- Agent startup sets `enable_string_uid: true`, `agent_rtc_uid` to the bot's account,
+  and `remote_rtc_uids` to the exact client account.
+- Official account-token generation preserves the bot's identity in its RTC/RTM
+  token and REST authorization; startup, stop and reconciliation use those tokens.
+
+Real-cloud checks used the published Studio pipeline, actual voice input through
+a virtual microphone, and the current SDK running inside Ink QuickJS/Wasm:
+
+| Client             | Outgoing RTP | Incoming AI RTP | Decoded samples | Peak remote audio |
+| ------------------ | -----------: | --------------: | --------------: | ----------------: |
+| Native Chrome WHIP |         2542 |            1583 |         1519200 |        -18.1 dBFS |
+| Ink Web + this SDK |         2462 |            1466 |         1402080 |        -15.2 dBFS |
+
+These are periodic samples before stop. Both clients completed cloud Agent,
+capture, media and audio cleanup. The measured downlink was the actual AI reply.
+The native browser and Ink results both passed; Android and native desktop hosts
+still require separate acceptance for this SDK.
+
+A second Ink Web run kept one Ink client connected to the cloud agent for a
+120-second observation window, with **no Agora RTC SDK loaded or observer joined**.
+The virtual microphone repeated a spoken question through the normal capture and
+WHIP path. Cloud history contained three complete user/assistant turns and a fourth
+user input before shutdown. The last periodic sample reported 6556 outgoing RTP
+packets, 5514 incoming AI packets and 5291040 decoded samples. The native browser
+peer remained connected, and capture, audio, media and cloud-agent cleanup completed.
+The received WHIP audio was recorded separately from the microphone as evidence.
+
+This verifies repeated voice input and actual decoded AI replies in Ink Web; it
+does not claim a new physical Android or native desktop playback test.

@@ -31,7 +31,7 @@ const adapter: VoiceBackend = {
       whip: {
         baseURL: 'https://whip.example.test',
         channel: 'demo',
-        uid: 10001,
+        uid: 'aiui-test',
         token: 'temporary-whip-jwt',
       },
     };
@@ -48,11 +48,11 @@ new AgoraVoiceSession({
   connection: async () => ({
     baseURL: 'https://whip.example.test',
     channel: 'demo',
-    uid: 10001,
+    uid: 'aiui-direct',
     token: async () => 'temporary-whip-jwt',
   }),
 });
 // @ts-expect-error choose either a managed backend or a direct connection
 new AgoraVoiceSession({ backend, connection: { baseURL: '', channel: '', uid: 1, token: '' } });
-// @ts-expect-error numeric identity is required
-createAgoraVoiceSession({ connection: { baseURL: '', channel: '', uid: '10001', token: '' } });
+// @ts-expect-error an identity must be a string account or a numeric UID
+createAgoraVoiceSession({ connection: { baseURL: '', channel: '', uid: {}, token: '' } });

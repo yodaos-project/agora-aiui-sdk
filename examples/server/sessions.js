@@ -1,13 +1,15 @@
-import { randomInt, randomUUID } from 'node:crypto';
-import { agoraEndpoint } from '../../src/agora.js';
+import { randomUUID } from 'node:crypto';
+import { agoraEndpoint, isAgoraUid } from '../../src/agora.js';
 import { createWhipToken } from './token.js';
 
-/** Use separate UID ranges within the cloud Agent API's signed 32-bit limit. */
-export function participantUids(uid = randomInt(1, 1_000_000_000)) {
-  if (!Number.isInteger(uid) || uid < 1 || uid >= 1_000_000_000) {
-    throw new RangeError('Client UID must be between 1 and 999999999.');
+/** Allocate distinct string accounts for the client and the cloud agent. */
+export function participantUids(id = randomUUID()) {
+  const uid = `aiui-${id}`;
+  const botUid = `agent-${id}`;
+  if (typeof id !== 'string' || !id || !isAgoraUid(uid) || !isAgoraUid(botUid)) {
+    throw new RangeError('Participant IDs must produce valid string accounts.');
   }
-  return { uid, botUid: uid + 1_000_000_000 };
+  return { uid, botUid };
 }
 
 export class ServiceError extends Error {
@@ -41,8 +43,14 @@ export function createSessionService({
   )
     throw new TypeError('Invalid session limits.');
   // Validate at startup before accepting requests, using placeholder session identities.
-  agoraEndpoint({ baseURL, channel: 'validation', uid: 1 });
-  createWhipToken({ appId, certificate, channel: 'validation', uid: 1, lifetime: tokenLifetime });
+  agoraEndpoint({ baseURL, channel: 'validation', uid: 'aiui-validation' });
+  createWhipToken({
+    appId,
+    certificate,
+    channel: 'validation',
+    uid: 'aiui-validation',
+    lifetime: tokenLifetime,
+  });
   const records = new Map();
   let closing = false;
 
@@ -108,7 +116,7 @@ export function createSessionService({
         throw new ServiceError(429, 'SESSION_LIMIT');
       }
       const id = randomUUID();
-      const { uid, botUid } = participantUids();
+      const { uid, botUid } = participantUids(id);
       const record = {
         id,
         owner,
@@ -123,7 +131,7 @@ export function createSessionService({
       records.set(id, record);
       return {
         id,
-        whip: { baseURL, channel: record.channel, uid, stringUid: `aiui-${uid}`, ...token(record) },
+        whip: { baseURL, channel: record.channel, uid, ...token(record) },
         lease: lease(record),
       };
     },

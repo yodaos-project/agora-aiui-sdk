@@ -14,9 +14,9 @@ SDK 负责麦克风采集、双向音频、静音、音量和连接状态。业�
 - 取消连接、立即停止采集、超时清理和后端会话租约。
 - JavaScript 模块、TypeScript 类型声明、眼镜尺寸的 AIUI 页面和参考后端。
 
-**当前实测状态：** 云端 Agent 启动、语音识别和 LLM 回答已验证；测试部署尚未向 WHIP
-客户端回传云端 Agent 音频。原生 Chrome 绕开 Ink 也能复现，完整语音验收仍待完成。
-详见[验证记录](docs/validation.md#live-cloud-result-2026-10-27)。
+**当前实测状态：** 客户端和云端 AI 必须统一使用字符串 UID。
+之前使用数字 UID 的测试无法收到 AI 语音；改用字符串账号后的宿主与对话验证结果，
+详见[验证记录](docs/validation.md#string-uid-correction-2026-10-29)。
 
 客户端没有额外运行时依赖，使用 Ink 自带的 WHIP、WebRTC、Web Audio 和麦克风 API。
 需要包含 [WHIP 支持](https://github.com/jsar-project/ink/pull/735) 的 Ink 构建，
@@ -95,8 +95,7 @@ const voice = createAgoraVoiceSession({
   connection: {
     baseURL: 'https://ap-webrtc-whip.ap.sd-rtn.com',
     channel: 'your-channel',
-    uid: 10001,
-    stringUid: 'aiui-client-10001',
+    uid: 'aiui-client-10001',
     token: '从可信服务获取的临时 WHIP JWT',
   },
 });
@@ -105,8 +104,11 @@ await voice.start();
 await voice.stop();
 ```
 
-JWT 中的频道和数字 UID 必须与连接配置一致。每个参与者，包括云端 AI，使用不同的数字 UID。
-`stringUid` 是额外的网关别名。这里使用 Agora 的双向 WHIP 扩展；只支持推流的标准 WHIP
+JWT 授权的频道必须与连接配置一致。连接云端 AI 时，客户端使用**字符串 UID**，通过
+WHIP URL 的 `stringuid` 传入；云端设置 `enable_string_uid: true`，并把同一个客户端
+字符串填入 `remote_rtc_uids`，AI 自己的 `agent_rtc_uid` 使用另一个字符串账号。
+此模式不发送数字 `Uid` 参数，WHIP JWT 也不包含 `uid` 字段。
+这里使用 Agora 的双向 WHIP 扩展；只支持推流的标准 WHIP
 服务不能直接提供语音对话所需的下行音频。
 
 长时间通话可以把 `token` 换成异步函数，按需获取新 JWT。关闭 WHIP 会话时也可能再次请求凭证。
@@ -132,7 +134,7 @@ SDK 不保证后台持续录音或播放，这取决于宿主策略。
 ## 凭证放在哪里？
 
 - **App Certificate、云端模型 API Key**：只放服务端环境变量。
-- **WHIP JWT**：服务端签发后临时发给客户端，绑定频道、UID 和有效期。
+- **WHIP JWT**：服务端签发后临时发给客户端，授权频道并设置有效期；字符串身份在 URL 的 `stringuid` 中传入。
 - **业务登录凭证**：用于访问你自己的会话后端。
 
 参考后端使用官方 [`agora-agents`](https://github.com/AgoraIO/agora-agents-ts) 启停云端 AI。

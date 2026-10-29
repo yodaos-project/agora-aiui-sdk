@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
+import accessToken from 'agora-token/src/AccessToken2.js';
 import { createSessionService, participantUids } from '../examples/server/sessions.js';
 import { createVoiceHandler, bearerAuthorizer } from '../examples/server/http.js';
 import { createAgoraAgentFactory } from '../examples/server/agora.js';
@@ -14,15 +15,24 @@ const credentials = { appId: '1'.repeat(32), certificate: '2'.repeat(32) };
 const demoToken = 'test-business-api-token-not-a-real-secret';
 const defaults = { ...credentials, baseURL: 'https://whip.example.test' };
 
-test('managed participant allocation respects the cloud agent UID limit at both boundaries', () => {
-  for (const seed of [1, 999_999_999]) {
+test('managed participant accounts are distinct and respect the UTF-8 byte limit', () => {
+  for (const seed of ['example', 'a'.repeat(249)]) {
     const { uid, botUid } = participantUids(seed);
-    assert(uid > 0 && uid <= 2_147_483_647);
-    assert(botUid > 0 && botUid <= 2_147_483_647);
+    assert.equal(uid, `aiui-${seed}`);
+    assert.equal(botUid, `agent-${seed}`);
     assert.notEqual(uid, botUid);
   }
-  for (const seed of [0, 1_000_000_000, 2_000_000_000, NaN])
+  for (const seed of [0, '', 'a'.repeat(250), '界'.repeat(84), NaN])
     assert.throws(() => participantUids(seed), RangeError);
+});
+
+test('string-account WHIP JWT authorizes the channel without a numeric uid claim', () => {
+  const { token } = createWhipToken({ ...credentials, channel: 'example', uid: 'aiui-test' });
+  const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url'));
+  assert.equal(claims.streamID, 'example');
+  assert.equal(claims.enableSubAuth, true);
+  assert.equal('uid' in claims, false);
+  assert.throws(() => createWhipToken({ ...credentials, channel: 'example', uid: '' }));
 });
 
 function service(options = {}) {
@@ -86,11 +96,11 @@ test('WHIP JWT uses certificate text, numeric UID and duplex claims with seconds
   assert.throws(() => createWhipToken({ ...credentials, channel: 'a', uid: 0 }));
 });
 
-test('reservation creates distinct numeric participants and starts once, stop is idempotent', async () => {
+test('reservation creates string participants and starts once, stop is idempotent', async () => {
   const { store, events } = service();
   const reservation = store.createSession('alice');
   assert.equal(events.length, 0);
-  assert.equal(typeof reservation.whip.uid, 'number');
+  assert.equal(typeof reservation.whip.uid, 'string');
   assert.equal(reservation.whip.channel.length, 41);
   await Promise.all([
     store.startAgent(reservation.id, 'alice'),
@@ -184,7 +194,9 @@ test('actual HTTP adapter and handler perform a managed SDK call without exposin
   const authorization = await runtime.whips[0].options.authorization();
   const jwt = JSON.parse(Buffer.from(authorization.split('.')[1], 'base64url'));
   const endpoint = new URL(runtime.whips[0].endpoint);
-  assert.equal(jwt.uid, endpoint.searchParams.get('Uid'));
+  assert.equal('uid' in jwt, false);
+  assert.equal(endpoint.searchParams.has('Uid'), false);
+  assert.match(endpoint.searchParams.get('stringuid'), /^aiui-/);
   assert.equal(jwt.streamID, decodeURIComponent(endpoint.pathname.slice('/pub/'.length)));
   await voice.stop();
   assert.deepEqual(events, ['start', 'stop']);
@@ -266,8 +278,9 @@ test('HTTP success without an explicit agent acknowledgement is not treated as c
   await assert.rejects(backend.stopSession({ sessionId: 'test' }), { code: 'BACKEND' });
 });
 
-test('official Agora server SDK sends the expected pipeline and numeric identities', async (t) => {
+test('official Agora server SDK preserves string accounts in join, auth and RTC tokens', async (t) => {
   const requests = [];
+  let stopAttempts = 0;
   const upstream = await listen(t, async (request, response) => {
     let body = '';
     for await (const chunk of request) body += chunk;
@@ -278,6 +291,11 @@ test('official Agora server SDK sends the expected pipeline and numeric identiti
       body: body ? JSON.parse(body) : null,
     });
     response.setHeader('Content-Type', 'application/json');
+    if (request.url.endsWith('/leave') && ++stopAttempts === 1) {
+      response.writeHead(500);
+      response.end(JSON.stringify({ message: 'Retry this stop.' }));
+      return;
+    }
     response.end(
       JSON.stringify(
         request.method === 'POST' && request.url.endsWith('/join')
@@ -300,20 +318,34 @@ test('official Agora server SDK sends the expected pipeline and numeric identiti
   const bot = factory({
     sessionId: 'test',
     channel: 'test-channel',
-    uid: 10001,
-    botUid: 20001,
+    uid: 'aiui-test',
+    botUid: 'agent-test',
     maxDurationSeconds: 600,
   });
   await bot.start();
+  await assert.rejects(bot.stop(), { statusCode: 500 });
   await bot.stop();
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 3);
   assert.match(requests[0].path, /\/projects\/[\da-f]+\/join$/);
   assert.match(requests[0].authorization, /^agora token=/);
   const payload = requests[0].body;
   assert.equal(payload.pipeline_id, 'test-pipeline');
   assert.equal(payload.properties.channel, 'test-channel');
-  assert.equal(payload.properties.agent_rtc_uid, '20001');
-  assert.deepEqual(payload.properties.remote_rtc_uids, ['10001']);
-  assert.equal(payload.properties.enable_string_uid, false);
+  assert.equal(payload.properties.agent_rtc_uid, 'agent-test');
+  assert.deepEqual(payload.properties.remote_rtc_uids, ['aiui-test']);
+  assert.equal(payload.properties.enable_string_uid, true);
+  for (const encoded of [
+    payload.properties.token,
+    requests[0].authorization.slice('agora token='.length),
+    ...requests.slice(1).map((request) => request.authorization.slice('agora token='.length)),
+  ]) {
+    const parsed = new accessToken.AccessToken2();
+    assert.equal(parsed.from_string(encoded), true);
+    assert.equal(parsed.appId.toString(), credentials.appId);
+    assert.equal(parsed.getServices(1)[0].__channel_name.toString(), 'test-channel');
+    assert.equal(parsed.getServices(1)[0].__uid.toString(), 'agent-test');
+    assert.equal(parsed.getServices(2)[0].__user_id.toString(), 'agent-test');
+  }
   assert.match(requests[1].path, /\/agents\/test-cloud-agent\/leave$/);
+  assert.equal(requests[2].path, requests[1].path);
 });

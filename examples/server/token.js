@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { isAgoraUid } from '../../src/agora.js';
 
 /** Sign the duplex gateway JWT; this is separate from an Agora RTC AccessToken. */
 export function createWhipToken({
@@ -17,9 +18,7 @@ export function createWhipToken({
     typeof channel !== 'string' ||
     !channel ||
     channel.length > 64 ||
-    !Number.isInteger(uid) ||
-    uid < 1 ||
-    uid > 4_294_967_294 ||
+    !isAgoraUid(uid) ||
     !Number.isInteger(lifetime) ||
     lifetime < 1 ||
     lifetime > 86_400
@@ -32,7 +31,7 @@ export function createWhipToken({
     version: '1.0',
     appID: appId,
     streamID: channel,
-    uid: String(uid),
+    ...(typeof uid === 'number' ? { uid: String(uid) } : {}),
     exp: expires,
     action: 'pub',
     enableSubAuth: true,

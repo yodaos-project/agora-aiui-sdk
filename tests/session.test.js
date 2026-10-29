@@ -11,12 +11,22 @@ test('Agora endpoint preserves numeric Uid and encodes channel/string UID', () =
   assert.equal(url.searchParams.get('Uid'), '10001');
   assert.equal(url.searchParams.get('stringuid'), 'display & name');
   assert.equal(url.searchParams.get('duplex'), 'true');
-  for (const uid of [0, -1, 4_294_967_295, '10001', NaN])
+  for (const uid of [0, -1, 4_294_967_295, '', NaN, 'a'.repeat(256), '界'.repeat(86)])
     assert.throws(() => agoraEndpoint({ ...connection, uid }));
   assert.throws(() =>
     agoraEndpoint({ ...connection, baseURL: 'https://user:secret@example.test' }),
   );
   assert.throws(() => agoraEndpoint({ ...connection, baseURL: 'http://example.test' }));
+});
+
+test('string accounts are the sole WHIP identity and cannot be overridden by an alias', () => {
+  const url = new URL(agoraEndpoint({ ...connection, uid: 'aiui-user/a & b' }));
+  assert.equal(url.searchParams.get('stringuid'), 'aiui-user/a & b');
+  assert.equal(url.searchParams.has('Uid'), false);
+  assert.equal(url.searchParams.get('duplex'), 'true');
+  assert.throws(() => agoraEndpoint({ ...connection, uid: 'alice', stringUid: 'bob' }));
+  assert.doesNotThrow(() => agoraEndpoint({ ...connection, uid: 'a'.repeat(255) }));
+  assert.doesNotThrow(() => agoraEndpoint({ ...connection, uid: '界'.repeat(85) }));
 });
 
 test('direct media uses the merged WHIP API and owns its capture and graph', async (t) => {

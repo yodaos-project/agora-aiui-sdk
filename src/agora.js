@@ -1,4 +1,14 @@
-/** Build the Agora duplex endpoint; numeric Uid and JWT uid must identify the same user. */
+/** Accept a numeric RTC UID or a nonempty string account of at most 255 UTF-8 bytes. */
+export function isAgoraUid(uid) {
+  return typeof uid === 'string'
+    ? uid.length > 0 &&
+        uid.length <= 255 &&
+        !uid.includes('\u0000') &&
+        new TextEncoder().encode(uid).length <= 255
+    : Number.isInteger(uid) && uid >= 1 && uid <= 4_294_967_294;
+}
+
+/** Build the duplex endpoint using one consistent numeric or string identity. */
 export function agoraEndpoint(connection) {
   if (!connection || typeof connection !== 'object') {
     throw new TypeError('An Agora connection is required.');
@@ -16,8 +26,14 @@ export function agoraEndpoint(connection) {
   if (typeof channel !== 'string' || !channel || channel.length > 64) {
     throw new TypeError('Agora channel must contain 1 to 64 characters.');
   }
-  if (!Number.isInteger(uid) || uid < 1 || uid > 4_294_967_294) {
-    throw new TypeError('Agora uid must be an integer from 1 to 4294967294.');
+  if (!isAgoraUid(uid)) {
+    throw new TypeError('Agora uid must be a nonempty string account or a valid numeric UID.');
+  }
+  if (typeof uid === 'string') {
+    if (connection.stringUid !== undefined && connection.stringUid !== uid) {
+      throw new TypeError('A string uid must match stringUid when both are provided.');
+    }
+    return `${base.origin}/pub/${encodeURIComponent(channel)}?stringuid=${encodeURIComponent(uid)}&duplex=true`;
   }
   if (typeof stringUid !== 'string' || !stringUid || stringUid.length > 255) {
     throw new TypeError('Agora stringUid must contain 1 to 255 characters.');

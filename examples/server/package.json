@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "agora-agents": "2.12.0"
+    "agora-agents": "2.12.0",
+    "agora-token": "2.0.7"
   }
 }
