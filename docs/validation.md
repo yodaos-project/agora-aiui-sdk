@@ -68,6 +68,14 @@ These results are specific to the tested endpoint, pipeline, and host builds.
 They do not establish reliability for every device, network, or pipeline.
 Use the checks below with your own deployment.
 
+On **2026-10-30**, native `ink-open` also received actual ASR partial results and
+streaming AI replies through RTM, without history polling or a local relay server.
+Two consecutive real RTM login/subscribe/logout cycles reused one client for a
+fixed account. The user confirmed that the turn-taking example no longer mixed
+AI playback or speech during the reply into the next recognized utterance.
+This uses half-duplex microphone gating, not native echo cancellation; wait for
+the AI to finish before speaking. It does not guarantee a particular ASR latency.
+
 ## Accept a release on your target host
 
 1. Start from a user action and allow the microphone.

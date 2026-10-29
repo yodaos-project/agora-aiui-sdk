@@ -322,6 +322,8 @@ test('official Agora server SDK preserves string accounts in join, auth and RTC 
     ...credentials,
     pipelineId: 'test-pipeline',
     area: 'AP',
+    enableRtm: true,
+    asrLanguage: 'zh-CN',
   });
   const bot = factory({
     sessionId: 'test',
@@ -348,6 +350,9 @@ test('official Agora server SDK preserves string accounts in join, auth and RTC 
   assert.equal(payload.properties.agent_rtc_uid, 'agent-test');
   assert.deepEqual(payload.properties.remote_rtc_uids, ['aiui-test']);
   assert.equal(payload.properties.enable_string_uid, true);
+  assert.equal(payload.properties.advanced_features.enable_rtm, true);
+  assert.equal(payload.properties.parameters.data_channel, 'rtm');
+  assert.deepEqual(payload.properties.asr, { language: 'zh-CN' });
   for (const encoded of [
     payload.properties.token,
     requests[0].authorization.slice('agora token='.length),
@@ -364,6 +369,34 @@ test('official Agora server SDK preserves string accounts in join, auth and RTC 
   assert.equal(requests[1].method, 'GET');
   assert.match(requests[2].path, /\/agents\/test-cloud-agent\/leave$/);
   assert.equal(requests[3].path, requests[2].path);
+});
+
+test('RTM credentials match the reservation and refresh only for its owner while active', async (t) => {
+  const { store } = service();
+  t.after(() => store.close());
+  let refreshes = 0;
+  const handler = createVoiceHandler({ service: store, authorize: bearerAuthorizer(demoToken) });
+  const baseURL = await listen(t, (request, response) => {
+    if (request.url.endsWith('/rtm-token')) refreshes++;
+    return handler(request, response);
+  });
+  const backend = createHttpVoiceBackend({ baseURL, authorization: `Bearer ${demoToken}` });
+  const reservation = await backend.createSession({ signal: new AbortController().signal });
+  assert.equal(reservation.rtm.channel, reservation.whip.channel);
+  assert.equal(reservation.rtm.userId, reservation.whip.uid);
+  assert.notEqual(reservation.rtm.agentUserId, reservation.rtm.userId);
+  for (let call = 0; call < 2; call++) {
+    const encoded = await reservation.rtm.token({ signal: new AbortController().signal });
+    const parsed = new accessToken.AccessToken2();
+    assert.equal(parsed.from_string(encoded), true);
+    assert.equal(parsed.getServices(2)[0].__user_id.toString(), reservation.whip.uid);
+    assert.equal(refreshes, call);
+  }
+  assert.throws(() => store.refreshRtmToken(reservation.id, 'another-owner'), { status: 404 });
+  await backend.stopSession({ sessionId: reservation.id, signal: new AbortController().signal });
+  await assert.rejects(reservation.rtm.token({ signal: new AbortController().signal }), {
+    code: 'BACKEND',
+  });
 });
 
 test('transcript HTTP reads enforce ownership, coalesce requests and redact closed reservations', async (t) => {

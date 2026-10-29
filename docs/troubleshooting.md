@@ -78,10 +78,20 @@ a session backend at runtime. Keep signing certificates off the client.
 
 ## Can I add captions, messages, or tools?
 
-The SDK can display ASR and AI reply text from conversation history. Live
-word-synchronized captions, RTM messages, AI semantic events, and local tool
-execution need additional integration.
+The SDK receives live ASR and AI reply text through RTM. It displays partial
+results without polling history. Playback-synchronized word captions, general
+chat message sending, AI semantic events, and local tools need additional integration.
 Audio transport does not itself create a messaging channel.
+
+## ASR text appears slowly
+
+Check `getTranscriptState().status` first. If connected, partial results should
+appear as RTM delivers them; the client does not wait for `final: true`.
+ASR language, model processing, upstream audio buffering and network delay still
+affect the first recognized words. Use a recognition language matching the user,
+for example `asr.language: 'zh-CN'` for Chinese ARES. Some vendors use a separate
+`asr.params.language` that overrides it. Change the session or pipeline setting;
+do not add history polling or artificial character-by-character animation.
 
 ## What should I include in a support report?
 

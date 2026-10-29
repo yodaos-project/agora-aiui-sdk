@@ -33,6 +33,9 @@ export function transcriptSnapshot(messages) {
         role: message.role,
         text,
         interrupted: message.interrupted === true,
+        ...(['in-progress', 'final', 'interrupted'].includes(message.status)
+          ? { status: message.status }
+          : {}),
       }),
     );
   }

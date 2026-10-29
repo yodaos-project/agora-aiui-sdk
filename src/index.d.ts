@@ -11,6 +11,7 @@ export interface VoiceCleanupReport {
   readonly audio: CleanupResult;
   /** The backend acknowledged stop, or cleanup is unconfirmed. */
   readonly backend: CleanupResult;
+  readonly transcripts?: CleanupResult;
 }
 
 export interface VoiceState {
@@ -20,6 +21,8 @@ export interface VoiceState {
   readonly agent: VoiceAgentState;
   readonly audio: AudioContextState;
   readonly microphoneMuted: boolean;
+  /** Half-duplex playback/turn-taking gate; independent of the user's mute choice. */
+  readonly microphoneSuppressed: boolean;
   readonly speakerMuted: boolean;
   readonly volume: number;
   readonly error: Readonly<{ code: string; message: string }> | null;
@@ -49,6 +52,7 @@ export interface VoiceReservation {
   id: string;
   whip: AgoraConnection;
   lease?: VoiceLease;
+  rtm?: AgoraRtmConnection;
 }
 
 /** A bounded conversation-history message, without word or playback timing. */
@@ -57,7 +61,67 @@ export interface VoiceTranscript {
   readonly role: 'user' | 'assistant';
   readonly text: string;
   readonly interrupted: boolean;
+  /** Present on RTM updates; this does not report local playback progress. */
+  readonly status?: 'in-progress' | 'final' | 'interrupted';
 }
+
+export interface AgoraRtmConnection {
+  appId: string;
+  userId: string;
+  agentUserId: string;
+  channel: string;
+  token: string | ((options: { signal: AbortSignal }) => string | Promise<string>);
+}
+
+export interface VoiceTranscriptState {
+  readonly status: 'disabled' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed';
+  readonly error: Readonly<{ code: string; message: string }> | null;
+}
+
+export interface VoiceTranscriptSource {
+  connect(options: {
+    connection?: AgoraRtmConnection;
+    signal: AbortSignal;
+    onUpdate: (snapshot: readonly VoiceTranscript[]) => void;
+    onState: (state: Readonly<VoiceTranscriptState>) => void;
+    onActivity?: (activity: {
+      listening?: boolean;
+      thinking?: boolean;
+      speaking?: boolean;
+    }) => void;
+  }): { ready: Promise<void>; close(): Promise<unknown> };
+}
+
+/** Structural subset of the official RTM client used by this SDK. */
+export interface AgoraRtmClient {
+  login(options: { token: string }): Promise<unknown>;
+  subscribe(
+    channel: string,
+    options: {
+      withMessage: boolean;
+      withPresence: boolean;
+      withMetadata: boolean;
+      withLock: boolean;
+    },
+  ): Promise<unknown>;
+  logout(): Promise<unknown>;
+  renewToken(token: string): Promise<unknown>;
+  addEventListener(name: string, callback: (...args: any[]) => void): unknown;
+  removeEventListener(name: string, callback: (...args: any[]) => void): unknown;
+}
+
+export function createAgoraRtmTranscripts(options: {
+  RTM: new (
+    appId: string,
+    userId: string,
+    options: {
+      logLevel: 'none';
+      logUpload: false;
+      useStringUserId: true;
+    },
+  ) => AgoraRtmClient;
+  timeout?: number;
+}): VoiceTranscriptSource;
 
 export interface VoiceBackend {
   /** Reserve credentials only. Do not start the cloud agent here. */
@@ -77,6 +141,10 @@ export interface VoiceBackend {
 }
 
 interface CommonVoiceOptions {
+  /** Default full-duplex. Half-duplex pauses microphone transmission while the AI replies. */
+  microphoneMode?: 'full-duplex' | 'half-duplex';
+  /** Optional live RTM text. Managed backend reservations must include rtm credentials. */
+  transcripts?: VoiceTranscriptSource;
   /** Maximum startup duration in ms. Default 15000. */
   timeout?: number;
   /** Independent deadline for each cleanup operation in ms. Default 5000. */
@@ -90,6 +158,7 @@ export type AgoraVoiceOptions = CommonVoiceOptions &
           | AgoraConnection
           | ((options: { signal: AbortSignal }) => AgoraConnection | Promise<AgoraConnection>);
         backend?: never;
+        transcripts?: never;
       }
     | { backend: VoiceBackend; connection?: never }
   );
@@ -116,6 +185,10 @@ export class AgoraVoiceSession extends EventTarget {
   getStats(): Promise<RTCStatsReport>;
   /** Fetch history while running; callers choose polling. Does not synchronize text to audio. */
   getTranscripts(options?: { signal?: AbortSignal }): Promise<readonly VoiceTranscript[]>;
+  /** Listen for transcriptchange, then read the pushed messages without a network request. */
+  getTranscriptSnapshot(): readonly VoiceTranscript[];
+  /** Listen for transcriptstatechange to observe text transport availability. */
+  getTranscriptState(): Readonly<VoiceTranscriptState>;
 }
 
 export function createAgoraVoiceSession(options: AgoraVoiceOptions): AgoraVoiceSession;

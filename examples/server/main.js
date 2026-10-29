@@ -10,6 +10,8 @@ const createAgent = createAgoraAgentFactory({
   certificate,
   pipelineId: process.env.AGORA_PIPELINE_ID,
   area: process.env.AGORA_AREA || 'AP',
+  enableRtm: true,
+  asrLanguage: process.env.AGORA_ASR_LANGUAGE || undefined,
 });
 const service = createSessionService({
   appId,

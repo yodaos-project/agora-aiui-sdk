@@ -17,6 +17,7 @@ Ink 桌面程序可在 [Ink Releases](https://github.com/jsar-project/ink/releas
 | Ink 宿主                        | 使用包含 `WHIPSession`、WebRTC、Web Audio 和麦克风能力的 Ink 构建。桌面端可以使用 `ink-open`。 |
 | Agora App ID 和 App Certificate | 在 Agora 项目设置中获取。Certificate 只保存在后端。                                            |
 | 双向 WHIP 地址                  | 确认 Agora 已为你的项目和区域开通双向 WHIP。                                                   |
+| Signaling（RTM）                | 为同一个 Agora 项目启用 Signaling，用来接收实时对话文字。                                      |
 | 已发布的语音 pipeline           | 在 Agora Agent Studio 中配置并发布一个语音助手。                                               |
 
 先在 Studio 测试面板中确认可以与助手语音对话。
@@ -113,7 +114,7 @@ ink-open examples/agent --networking-transport native --permission-checks
 2. 等待显示「我在，慢慢说。」和「Agora · 已连接」。
 3. 用助手配置的语言，问一个简短问题。
 4. 听 AI 回答。是否主动播放欢迎语，取决于你的 pipeline。
-5. 对话进行后可以看到识别结果和 AI 回复，点击「收起文字」可返回语音界面。
+5. ASR 中间结果和 AI 回复会通过 RTM 实时更新，点击「收起文字」可返回语音界面。
 6. 测试完毕，点击「结束通话」。
 
 通话时保持 Ink 在前台。切回窗口后如果音频暂停，点击提示中的「继续聊天」。
@@ -124,6 +125,7 @@ ink-open examples/agent --networking-transport native --permission-checks
 ## 换到其他宿主
 
 - **Ink Web**：以完整前台 AIUI Agent 打开，允许录音，使用 HTTPS 后端。
+  在 `createInkView` 中为 SDK 设置有限的初始化时限，例如 `scriptExecution: { timeoutMs: 10000 }`。
   在 `ALLOWED_ORIGINS` 中加入 Web 宿主页面的准确来源，见[宿主要求](integration.md#宿主要求)。
 - **Android 或眼镜**：部署设备可访问的 HTTPS 后端，再修改 `backendURL`。
   设备上的 `127.0.0.1` 指设备自己，不是你的电脑。

@@ -41,6 +41,15 @@ export class AgoraVoiceSession extends EventTarget {
       )
     )
       throw new TypeError('backend must implement createSession, startAgent and stopSession.');
+    if (options.transcripts && typeof options.transcripts.connect !== 'function')
+      throw new TypeError('transcripts must implement connect.');
+    if (options.transcripts && !options.backend)
+      throw new TypeError('Live transcripts require a managed backend reservation.');
+    if (
+      options.microphoneMode !== undefined &&
+      !['full-duplex', 'half-duplex'].includes(options.microphoneMode)
+    )
+      throw new TypeError('microphoneMode must be full-duplex or half-duplex.');
     this._options = { ...options };
     this._timeout = positiveMilliseconds(options.timeout, 15_000, 'timeout');
     this._cleanupTimeout = positiveMilliseconds(options.cleanupTimeout, 5_000, 'cleanupTimeout');
@@ -49,6 +58,10 @@ export class AgoraVoiceSession extends EventTarget {
     this._media = 'new';
     this._agent = options.backend ? 'idle' : 'not-managed';
     this._micMuted = false;
+    this._micSuppressed = options.microphoneMode === 'half-duplex';
+    this._microphoneHoldUntil = 0;
+    this._agentSpeaking = false;
+    this._agentThinking = false;
     this._speakerMuted = false;
     this._volume = 1;
     this._listeners = [];
@@ -60,6 +73,8 @@ export class AgoraVoiceSession extends EventTarget {
     this._lastLevelTime = -Infinity;
     this._error = null;
     this._cleanupReport = null;
+    this._transcriptMessages = Object.freeze([]);
+    this._transcriptState = Object.freeze({ status: 'disabled', error: null });
   }
 
   /** A sanitized snapshot: signaling, transport and cloud agent states are separate. */
@@ -70,6 +85,7 @@ export class AgoraVoiceSession extends EventTarget {
       agent: this._agent,
       audio: this._audio?.state ?? 'closed',
       microphoneMuted: this._micMuted,
+      microphoneSuppressed: this._micSuppressed,
       speakerMuted: this._speakerMuted,
       volume: this._volume,
       error: this._error
@@ -116,7 +132,10 @@ export class AgoraVoiceSession extends EventTarget {
       this._lifecycle = 'starting';
       step = 'AUDIO';
       this._audio = new AudioContext();
-      this._listen(this._audio, 'statechange', () => this._notify());
+      this._listen(this._audio, 'statechange', () => {
+        this._refreshMicrophoneGate();
+        this._notify();
+      });
       const resumed = this._audio.resume();
       this._notify();
       await acquire(resumed, signal);
@@ -175,7 +194,7 @@ export class AgoraVoiceSession extends EventTarget {
       checkSignal(signal);
       const track = this._stream.getAudioTracks()[0];
       if (!track || track.readyState === 'ended') throw new Error('No live audio track.');
-      track.enabled = !this._micMuted;
+      track.enabled = !this._micMuted && !this._micSuppressed;
       const microphoneEnded = () => this._fail('MICROPHONE', 'The microphone stopped.');
       if (typeof track.addEventListener === 'function')
         this._listen(track, 'ended', microphoneEnded);
@@ -186,6 +205,8 @@ export class AgoraVoiceSession extends EventTarget {
         }, 1000);
       }
       this._buildLocalAudio();
+      if (this._options.microphoneMode === 'half-duplex')
+        this._microphoneGateTimer = setInterval(() => this._refreshMicrophoneGate(), 100);
       pc.addTransceiver(track, { direction: 'sendrecv', streams: [this._stream] });
 
       step = 'MEDIA';
@@ -198,6 +219,9 @@ export class AgoraVoiceSession extends EventTarget {
       if (this._media !== 'connected') throw new Error('The media transport is unavailable.');
 
       if (this._options.backend) {
+        // Subscribe before starting the cloud AI so its first words are not missed.
+        await this._connectTranscripts();
+        checkSignal(signal);
         step = 'AGENT';
         this._agent = 'starting';
         this._notify();
@@ -209,7 +233,10 @@ export class AgoraVoiceSession extends EventTarget {
         checkSignal(signal);
         this._agent = 'running';
       }
+      if (this._options.microphoneMode === 'half-duplex')
+        this._microphoneHoldUntil = Math.max(this._microphoneHoldUntil, Date.now() + 1000);
       this._lifecycle = 'running';
+      this._refreshMicrophoneGate();
       this._notify();
       checkSignal(signal);
       return this.getState();
@@ -245,6 +272,30 @@ export class AgoraVoiceSession extends EventTarget {
   _listen(target, name, callback) {
     target.addEventListener(name, callback);
     this._listeners.push(() => target.removeEventListener(name, callback));
+  }
+
+  /** Half duplex gates transmission separately from the user's persistent mute choice. */
+  _refreshMicrophoneGate() {
+    if (this._options.microphoneMode !== 'half-duplex' || this._controller.signal.aborted) return;
+    const now = Date.now();
+    if (
+      this._lifecycle === 'running' &&
+      this._audio?.state === 'running' &&
+      this._remoteAnalyser &&
+      this.getAudioLevels().remote > -48
+    )
+      this._microphoneHoldUntil = now + 700;
+    const suppressed =
+      this._lifecycle !== 'running' ||
+      this._audio?.state !== 'running' ||
+      this._agentThinking ||
+      this._agentSpeaking ||
+      now < this._microphoneHoldUntil;
+    if (suppressed === this._micSuppressed) return;
+    this._micSuppressed = suppressed;
+    for (const track of this._stream?.getAudioTracks() ?? [])
+      track.enabled = !this._micMuted && !suppressed;
+    this._notify();
   }
 
   _notify() {
@@ -357,7 +408,8 @@ export class AgoraVoiceSession extends EventTarget {
 
   setMicrophoneMuted(muted) {
     this._micMuted = Boolean(muted);
-    for (const track of this._stream?.getAudioTracks() ?? []) track.enabled = !this._micMuted;
+    for (const track of this._stream?.getAudioTracks() ?? [])
+      track.enabled = !this._micMuted && !this._micSuppressed;
     this._notify();
   }
 
@@ -448,6 +500,82 @@ export class AgoraVoiceSession extends EventTarget {
     }
   }
 
+  /** Read the latest RTM snapshot synchronously from a transcriptchange listener. */
+  getTranscriptSnapshot() {
+    return this._transcriptMessages;
+  }
+
+  /** Text transport status is independent of audio and media state. */
+  getTranscriptState() {
+    return this._transcriptState;
+  }
+
+  _setTranscriptState({ status, error = null }) {
+    if (
+      this._transcriptState.status === status &&
+      this._transcriptState.error?.code === error?.code
+    )
+      return;
+    this._transcriptState = Object.freeze({
+      status,
+      error: error
+        ? Object.freeze({ code: 'TRANSCRIPTS', message: 'Live conversation text is unavailable.' })
+        : null,
+    });
+    this.dispatchEvent(new Event('transcriptstatechange'));
+  }
+
+  async _connectTranscripts() {
+    if (!this._options.transcripts) return;
+    const signal = this._controller.signal;
+    try {
+      this._transcriptSource = this._options.transcripts.connect({
+        connection: this._reservation.rtm,
+        signal,
+        onUpdate: (snapshot) => {
+          if (signal.aborted) return;
+          if (this._options.microphoneMode === 'half-duplex') {
+            let assistant;
+            for (let index = snapshot.length - 1; index >= 0; index--)
+              if (snapshot[index].role === 'assistant') {
+                assistant = snapshot[index];
+                break;
+              }
+            const assistantKey =
+              assistant && `${assistant.id}:${assistant.status}:${assistant.text.length}`;
+            if (assistantKey && assistantKey !== this._assistantTextKey) {
+              this._assistantTextKey = assistantKey;
+              this._microphoneHoldUntil = Date.now() + 700;
+              this._refreshMicrophoneGate();
+            }
+          }
+          this._transcriptMessages = transcriptSnapshot(snapshot);
+          this.dispatchEvent(new Event('transcriptchange'));
+        },
+        onState: (state) => {
+          if (!signal.aborted) {
+            if (['failed', 'disconnected', 'closed'].includes(state.status)) {
+              this._agentSpeaking = false;
+              this._agentThinking = false;
+              this._refreshMicrophoneGate();
+            }
+            this._setTranscriptState(state);
+          }
+        },
+        onActivity: (activity) => {
+          if (signal.aborted) return;
+          if (typeof activity.speaking === 'boolean') this._agentSpeaking = activity.speaking;
+          if (typeof activity.thinking === 'boolean') this._agentThinking = activity.thinking;
+          this._refreshMicrophoneGate();
+        },
+      });
+      await acquire(this._transcriptSource.ready, signal);
+    } catch {
+      checkSignal(signal);
+      this._setTranscriptState({ status: 'failed', error: true });
+    }
+  }
+
   /** Stop capture synchronously, then independently attempt remote and audio cleanup. */
   stop() {
     return this._stop(false);
@@ -458,8 +586,10 @@ export class AgoraVoiceSession extends EventTarget {
     const pending = deferred();
     this._stopPromise = pending.promise;
     this._controller.abort();
+    if (this._options.transcripts) this._setTranscriptState({ status: 'closed' });
     if (this._renewTimer != null) clearTimeout(this._renewTimer);
     if (this._trackTimer != null) clearInterval(this._trackTimer);
+    if (this._microphoneGateTimer != null) clearInterval(this._microphoneGateTimer);
     for (const remove of this._listeners.splice(0)) remove();
     stopTracks(this._stream);
     this._stream = null;
@@ -482,6 +612,8 @@ export class AgoraVoiceSession extends EventTarget {
     const whip = this._whip;
     const audio = this._audio;
     const reservation = this._reservation;
+    const transcriptSource = this._transcriptSource;
+    this._transcriptSource = null;
     this._whip = null;
     this._reservation = null;
     delete this._options.connection;
@@ -494,8 +626,16 @@ export class AgoraVoiceSession extends EventTarget {
             this._cleanupTimeout,
           )
         : 'not-needed',
-    ]).then(([media, audioResult, backend]) => {
-      this._cleanupReport = Object.freeze({ media, audio: audioResult, backend });
+      transcriptSource
+        ? bounded(() => transcriptSource.close(), this._cleanupTimeout)
+        : 'not-needed',
+    ]).then(([media, audioResult, backend, transcripts]) => {
+      this._cleanupReport = Object.freeze({
+        media,
+        audio: audioResult,
+        backend,
+        ...(this._options.transcripts ? { transcripts } : {}),
+      });
       if (this._options.backend)
         this._agent = backend === 'complete' || backend === 'not-needed' ? 'stopped' : 'unknown';
       this._lifecycle = failed ? 'failed' : 'stopped';

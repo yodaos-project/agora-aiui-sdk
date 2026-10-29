@@ -27,6 +27,8 @@
 持续通话时，不要重复使用示例代码里的临时 token，见 [Agora 嵌入指南](https://docs.agora.io/en/ai/studio/deploy/connect-agent)。
 
 Pipeline 提供语音识别、模型和声音配置。
+使用中文 ARES 时，可在后端设置 `AGORA_ASR_LANGUAGE=zh-CN`；不设置则沿用 pipeline 的识别语言。
+供应商的 `asr.params.language` 可能优先于这个设置。
 参考服务通过 [Agora 官方服务端 SDK](https://github.com/AgoraIO/agora-agents-ts)启停助手。
 官方服务端 SDK 放在后端，本项目的客户端 SDK 放在 AIUI Agent 中。
 
@@ -83,15 +85,15 @@ App Certificate 和模型 API Key 保留在服务端。
 实现下方 HTTP 接口后，可以直接使用 `createHttpVoiceBackend`。
 如果已有不同的业务接口，实现 [src/index.d.ts](../../src/index.d.ts) 中的 `VoiceBackend` 方法即可：
 
-| 方法                                    | 负责什么                                             |
-| --------------------------------------- | ---------------------------------------------------- |
-| `createSession({ signal })`             | 预留凭证，返回 `{ id, whip, lease? }`，先不启动 AI。 |
-| `startAgent({ sessionId, signal })`     | AIUI Agent 的媒体连接完成后，启动 AI。               |
-| `stopSession({ sessionId, signal })`    | 停止 AI、释放预留会话，也要处理较晚才完成的启动。    |
-| `renewSession({ sessionId, signal })`   | 返回 `{ lease }`。会话包含租约时必须实现。           |
-| `getTranscripts({ sessionId, signal })` | 返回对话消息。可选，用于显示 ASR 和 AI 回复文字。    |
+| 方法                                    | 负责什么                                                   |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `createSession({ signal })`             | 预留凭证，返回 `{ id, whip, rtm?, lease? }`，先不启动 AI。 |
+| `startAgent({ sessionId, signal })`     | AIUI Agent 的媒体连接完成后，启动 AI。                     |
+| `stopSession({ sessionId, signal })`    | 停止 AI、释放预留会话，也要处理较晚才完成的启动。          |
+| `renewSession({ sessionId, signal })`   | 返回 `{ lease }`。会话包含租约时必须实现。                 |
+| `getTranscripts({ sessionId, signal })` | 可选的按需历史查询；实时文字通过客户端 RTM 订阅接收。      |
 
-可选的文字方法返回规范化的 ASR 和助手消息。参考实现用服务端新凭证读取 Agora 对话记录，
+可选的历史方法返回规范化的 ASR 和助手消息，实时文字不使用这个方法。
 不向客户端返回供应商内部元数据或签名凭证。
 
 ## HTTP 接口
@@ -140,7 +142,38 @@ HTTP 接口时间戳使用 Unix **毫秒**，JWT 的 `exp` 使用**秒**。
 参考后端发生错误时，以非 2xx 状态返回 `{ "error": "CODE" }`。
 客户端显示安全的 `BACKEND` 错误，需要具体原因时查看服务端日志。
 
-### 读取对话文字
+### 启用实时文字
+
+先在 Agora Console 为项目启用 Signaling。参考后端会在启动 AI 时设置
+`advanced_features.enable_rtm: true` 和 `parameters.data_channel: 'rtm'`，
+并为 AI 签发同时包含 RTC、RTM 权限的 Token。用户和 AI 必须使用不同的字符串账号。
+
+预留会话的响应额外包含：
+
+```json
+{
+  "rtm": {
+    "appId": "your-agora-app-id",
+    "channel": "reserved-channel",
+    "userId": "aiui-client-account",
+    "agentUserId": "agent-account",
+    "token": "temporary-client-rtm-token",
+    "tokenExpiresAt": 1800000000000
+  }
+}
+```
+
+RTM 的频道和用户账号需要与 WHIP 会话一致，`agentUserId` 是预期的 AI 消息发送者。
+客户端会先完成登录、订阅，再调用 `startAgent`；只接受这个 AI 发送的转写消息。
+
+`POST /voice/sessions/:id/rtm-token` 返回
+`{ "token": "fresh-client-rtm-token", "tokenExpiresAt": 1800000000000 }`。
+签发前必须检查会话归属和租约有效期。HTTP 适配器使用初始 Token 登录，
+收到 RTM 即将过期的通知时再请求新 Token。
+返回的 Token 属于客户端账号，不要把 AI 的 Token 或签名证书下发给客户端。
+自定义后端也可以提供 `rtm.token({ signal })` 回调，代替这个 HTTP 刷新接口。
+
+### 按需读取历史记录
 
 `POST /voice/sessions/:id/transcripts` 返回 HTTP 200：
 
@@ -158,8 +191,8 @@ HTTP 接口时间戳使用 Unix **毫秒**，JWT 的 `exp` 使用**秒**。
 自定义 `VoiceBackend.getTranscripts({ sessionId, signal })` 直接返回消息数组，
 不需要 HTTP 的 `transcripts` 外层对象。
 
-示例每两秒刷新。这是对话文字，不是 RTM 消息流，也不是与 TTS 逐字同步的字幕。
-大规模部署或实时字幕应使用事件、消息通道，并遵守你的服务 API 频率限制。
+AIUI Agent 示例通过 RTM 接收实时文字，不调用这个接口。
+历史记录保留给主动查询和诊断使用，不是与 TTS 逐字同步的字幕。
 
 ## 部署前需要调整什么？
 

@@ -7,6 +7,7 @@ import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rtmVendorSource } from './rtm-vendor.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const ink = process.env.INK_WEB_DIST;
@@ -35,6 +36,7 @@ for (const name of await readdir(path.join(root, 'src'))) {
   if (name.endsWith('.js'))
     files[`lib/sdk/${name}`] = await readFile(path.join(root, 'src', name), 'utf8');
 }
+files['lib/sdk/rtm-vendor.js'] = await rtmVendorSource();
 const probe = `
 import { createAgoraVoiceSession } from '../../lib/sdk/index.js';
 export default {
@@ -79,7 +81,8 @@ try {
 const files = await (await fetch('/bundle')).json();
 const views = [];
 for (const [id,width,height,themeName] of [['color',448,170,'yodaos-sprite-color'],['green',448,170,'yodaos-sprite-greenonly'],['large',480,352,'yodaos-sprite-color']]) {
-  const view = await createInkView({ canvas: document.getElementById(id), width, height, themeName });
+  const view = await createInkView({ canvas: document.getElementById(id), width, height, themeName,
+    scriptExecution: { timeoutMs: 10000 } });
   view.startRendering(); view.openBundle({appId:'sdk-example-'+id,files}); views.push(view);
 }
 const probe = await createInkView({canvas:document.getElementById('probe'),width:200,height:100,permissionChecks:true,permissionRequests:true,

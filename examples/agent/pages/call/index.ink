@@ -1,5 +1,10 @@
 <script setup>
-  import { createAgoraVoiceSession, createHttpVoiceBackend } from '../../lib/sdk/index.js';
+  import {
+    createAgoraVoiceSession,
+    createHttpVoiceBackend,
+    createAgoraRtmTranscripts,
+  } from '../../lib/sdk/index.js';
+  import AgoraRTM from '../../lib/sdk/rtm-vendor.js';
   import configuration from '../../configuration.js';
   import { changedFields, presentCall } from './presentation.js';
 
@@ -7,6 +12,7 @@
     data: {
       ...presentCall(),
       micMuted: false,
+      micSuppressed: false,
       speakerMuted: false,
       clock: '00:00',
       bar1: 3,
@@ -22,6 +28,7 @@
         baseURL: configuration.backendURL,
         authorization: configuration.authorization,
       });
+      this.transcriptSource = createAgoraRtmTranscripts({ RTM: AgoraRTM.RTM });
     },
     onUnload() {
       this.unloaded = true;
@@ -41,6 +48,7 @@
       const patch = changedFields(this.data, {
         ...presentCall(state, speaking),
         micMuted: state.microphoneMuted,
+        micSuppressed: state.microphoneSuppressed,
         speakerMuted: state.speakerMuted,
         clock: `${minutes}:${seconds}`,
         bar1: bars[0],
@@ -54,23 +62,31 @@
       this.clearLevelTimer();
       this.clearTranscripts();
       if (this.voice && this.update) this.voice.removeEventListener('statechange', this.update);
-      this.transcriptKey = '';
       this.setData({ transcripts: [], transcriptNote: '' });
       this.startedAt = 0;
       this.speakingUntil = 0;
-      const voice = createAgoraVoiceSession({ backend: this.backend, timeout: 30000 });
+      const voice = createAgoraVoiceSession({
+        backend: this.backend,
+        timeout: 45000,
+        transcripts: this.transcriptSource,
+        microphoneMode: 'half-duplex',
+      });
       this.voice = voice;
       this.update = () => {
         if (this.unloaded || this.voice !== voice) return;
         const state = voice.getState();
         if (state.lifecycle !== 'running') {
           this.clearLevelTimer();
-          this.clearTranscripts();
+          if (['stopping', 'stopped', 'failed'].includes(state.lifecycle)) this.clearTranscripts();
           this.speakingUntil = 0;
         }
         this.renderCall(state, Date.now() < this.speakingUntil);
       };
       voice.addEventListener('statechange', this.update);
+      this.transcriptUpdate = () => this.refreshTranscripts(voice);
+      this.transcriptStateUpdate = () => this.refreshTranscripts(voice);
+      voice.addEventListener('transcriptchange', this.transcriptUpdate);
+      voice.addEventListener('transcriptstatechange', this.transcriptStateUpdate);
       try {
         await voice.start();
         if (this.unloaded || this.voice !== voice || voice.getState().lifecycle !== 'running')
@@ -78,7 +94,7 @@
         this.startedAt = Date.now();
         this.levelTimer = setInterval(() => this.refreshAudio(voice), 200);
         this.refreshAudio(voice);
-        this.startTranscripts(voice);
+        this.refreshTranscripts(voice);
       } catch {
         if (this.voice === voice) this.update();
       }
@@ -102,59 +118,30 @@
       ]);
     },
     clearTranscripts() {
-      if (this.transcriptTimer != null) clearTimeout(this.transcriptTimer);
-      this.transcriptTimer = null;
-      this.transcriptController?.abort();
-      this.transcriptController = null;
+      if (this.transcriptUpdate)
+        this.voice?.removeEventListener('transcriptchange', this.transcriptUpdate);
+      if (this.transcriptStateUpdate)
+        this.voice?.removeEventListener('transcriptstatechange', this.transcriptStateUpdate);
+      this.transcriptUpdate = null;
+      this.transcriptStateUpdate = null;
     },
-    startTranscripts(voice) {
-      this.clearTranscripts();
-      if (!this.data.showTranscripts) return;
-      const controller = new AbortController();
-      this.transcriptController = controller;
-      let delay = 2000;
-      const poll = async () => {
-        if (controller.signal.aborted || this.unloaded || this.voice !== voice) return;
-        let retry = true;
-        try {
-          const transcripts = await voice.getTranscripts({ signal: controller.signal });
-          if (controller.signal.aborted || this.unloaded || this.voice !== voice) return;
-          const key = JSON.stringify(transcripts);
-          if (key !== this.transcriptKey) {
-            this.transcriptKey = key;
-            this.setData({
-              transcripts: [...transcripts].reverse(),
-              transcriptNote: '',
-            });
-          } else if (this.data.transcriptNote) this.setData({ transcriptNote: '' });
-          delay = 2000;
-        } catch (error) {
-          if (controller.signal.aborted || this.unloaded || this.voice !== voice) return;
-          retry = error.code !== 'UNSUPPORTED';
-          this.setData({
-            transcriptNote: retry ? '文字暂不可用，语音可以继续。' : '当前服务暂未提供对话文字。',
-          });
-          delay = Math.min(30000, delay * 2);
-        } finally {
-          if (
-            retry &&
-            !controller.signal.aborted &&
-            !this.unloaded &&
-            this.voice === voice &&
-            voice.getState().lifecycle === 'running'
-          ) {
-            this.transcriptTimer = setTimeout(poll, delay);
-          }
-        }
-      };
-      void poll();
+    refreshTranscripts(voice) {
+      if (this.unloaded || this.voice !== voice || !this.data.showTranscripts) return;
+      const state = voice.getTranscriptState();
+      this.setData({
+        transcripts: [...voice.getTranscriptSnapshot()].reverse(),
+        transcriptNote:
+          state.status === 'failed'
+            ? '实时文字暂不可用，语音可以继续。'
+            : state.status === 'disconnected'
+              ? '文字连接恢复中…'
+              : '',
+      });
     },
     toggleTranscripts() {
       const showTranscripts = !this.data.showTranscripts;
       this.setData({ showTranscripts });
-      if (showTranscripts && this.voice?.getState().lifecycle === 'running')
-        this.startTranscripts(this.voice);
-      else this.clearTranscripts();
+      if (showTranscripts && this.voice) this.refreshTranscripts(this.voice);
     },
     toggleMicrophone() {
       if (this.data.canControl) this.voice?.setMicrophoneMuted(!this.data.micMuted);
@@ -245,7 +232,8 @@
         ink:key="id"
       >
         <text class="message-author"
-          >{{item.role === 'user' ? '你说的' : '小语'}}{{item.interrupted ? ' · 已打断' : ''}}</text
+          >{{item.role === 'user' ? '你说的' : '小语'}}{{item.interrupted ? ' · 已打断' :
+          item.status === 'in-progress' ? ' · 进行中' : ''}}</text
         >
         <text class="message-text">{{item.text}}</text>
       </view>
@@ -256,15 +244,15 @@
       <button
         ink:if="{{canControl}}"
         class="control {{micMuted ? 'is-muted' : ''}}"
-        disabled="{{!canControl}}"
+        disabled="{{!canControl || micSuppressed}}"
         bindtap="toggleMicrophone"
       >
         <image
           class="control-icon"
-          src="{{micMuted ? '/assets/microphone-off.svg' : '/assets/microphone.svg'}}"
+          src="{{micMuted || micSuppressed ? '/assets/microphone-off.svg' : '/assets/microphone.svg'}}"
           mode="aspectFit"
         />
-        <text>{{micMuted ? '开麦' : '静音'}}</text>
+        <text>{{micSuppressed ? '等我说完' : micMuted ? '开麦' : '静音'}}</text>
       </button>
       <button
         ink:if="{{canResume && showTranscripts && transcripts.length}}"

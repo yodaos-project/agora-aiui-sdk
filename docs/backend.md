@@ -31,6 +31,9 @@ Copy the ID from the generated code; do not reuse the snippet's temporary tokens
 for ongoing calls. See [Agora's embed guide](https://docs.agora.io/en/ai/studio/deploy/connect-agent).
 
 The pipeline supplies the speech recognition, language model, and voice settings.
+Optionally set `AGORA_ASR_LANGUAGE=zh-CN` in the backend environment for Chinese
+ARES recognition. Otherwise the example keeps the pipeline language. A vendor's
+`asr.params.language` may take precedence over this setting.
 The reference server uses the official [Agora server SDK](https://github.com/AgoraIO/agora-agents-ts)
 to start and stop it. That server SDK belongs on the backend; this project's client
 SDK belongs in your AIUI Agent.
@@ -96,17 +99,17 @@ Use `createHttpVoiceBackend` if you implement the HTTP contract below. If your
 service already has another API, implement the `VoiceBackend` methods from
 [src/index.d.ts](../src/index.d.ts):
 
-| Method                                  | Responsibility                                                                   |
-| --------------------------------------- | -------------------------------------------------------------------------------- |
-| `createSession({ signal })`             | Reserve credentials and return `{ id, whip, lease? }`. Do not start the AI yet.  |
-| `startAgent({ sessionId, signal })`     | Start the AI after the AIUI Agent's media is connected.                          |
-| `stopSession({ sessionId, signal })`    | Stop the AI and release the reservation. Also handle a start that finishes late. |
-| `renewSession({ sessionId, signal })`   | Return `{ lease }`. Required if reservations include a lease.                    |
-| `getTranscripts({ sessionId, signal })` | Return conversation messages. Optional; enables ASR and assistant text.          |
+| Method                                  | Responsibility                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------------------- |
+| `createSession({ signal })`             | Reserve credentials and return `{ id, whip, rtm?, lease? }`. Do not start the AI yet. |
+| `startAgent({ sessionId, signal })`     | Start the AI after the AIUI Agent's media is connected.                               |
+| `stopSession({ sessionId, signal })`    | Stop the AI and release the reservation. Also handle a start that finishes late.      |
+| `renewSession({ sessionId, signal })`   | Return `{ lease }`. Required if reservations include a lease.                         |
+| `getTranscripts({ sessionId, signal })` | Optional on-demand history. Live text uses the client's RTM subscription.             |
 
-The optional transcript method returns normalized ASR/assistant messages. The
-reference factory reads Agora history with fresh server-side authorization. No
-provider metadata or signing credentials are returned to the client.
+The optional history method returns normalized ASR/assistant messages. Live text
+does not use this method. No provider metadata or signing credentials are returned
+to the client.
 
 ## HTTP contract
 
@@ -156,7 +159,42 @@ The reference backend returns errors as `{ "error": "CODE" }` with a non-2xx
 status. The client exposes a safe `BACKEND` error; inspect server-side logs when
 you need the underlying reason.
 
-### Read conversation text
+### Enable live text
+
+Enable Signaling for your Agora project in the Console. The reference backend
+starts the AI with `advanced_features.enable_rtm: true` and
+`parameters.data_channel: 'rtm'`, and signs the agent token with both RTC and RTM
+privileges. Use distinct string accounts for the user and AI.
+
+Include this additional field in the reservation response:
+
+```json
+{
+  "rtm": {
+    "appId": "your-agora-app-id",
+    "channel": "reserved-channel",
+    "userId": "aiui-client-account",
+    "agentUserId": "agent-account",
+    "token": "temporary-client-rtm-token",
+    "tokenExpiresAt": 1800000000000
+  }
+}
+```
+
+The RTM channel and user account must match the WHIP reservation.
+`agentUserId` identifies the expected AI publisher. The client logs in and
+subscribes before calling `startAgent`; it accepts transcript messages from that
+publisher only.
+
+`POST /voice/sessions/:id/rtm-token` returns
+`{ "token": "fresh-client-rtm-token", "tokenExpiresAt": 1800000000000 }`.
+Check ownership and lease validity before signing. The HTTP adapter uses the
+initial token for login and requests a fresh token when RTM signals expiry.
+Tokens belong to the client account; do not return the AI's token or signing
+certificate. A custom backend can provide a `rtm.token({ signal })` callback
+instead of the HTTP refresh endpoint.
+
+### Read history on demand
 
 `POST /voice/sessions/:id/transcripts` returns HTTP 200:
 
@@ -175,9 +213,9 @@ reads for one reservation share one cloud request. Ended sessions cannot be read
 A custom `VoiceBackend.getTranscripts({ sessionId, signal })` returns the message
 array directly, without the HTTP `transcripts` wrapper.
 
-The AIUI Agent example polls every two seconds. This is conversation text, not an RTM
-stream or a word-synchronized TTS transcript. For large deployments or live captions,
-use a provider event/messaging feed and account for your API rate limits.
+The AIUI Agent example uses RTM for live text and does not call this endpoint.
+History remains available for explicit reads and diagnostics. It is not a
+word-synchronized TTS transcript.
 
 ## Before deploying
 

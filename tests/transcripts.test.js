@@ -119,6 +119,10 @@ test('transcript errors, timeouts and external cancellation do not interrupt an 
 
 test('audio-only direct sessions remain usable when transcript support is absent', async (t) => {
   fakeRuntime(t);
+  assert.throws(
+    () => createAgoraVoiceSession({ connection, transcripts: { connect() {} } }),
+    /managed backend/,
+  );
   const voice = createAgoraVoiceSession({ connection });
   t.after(() => voice.stop());
   await voice.start();

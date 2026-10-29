@@ -6,9 +6,24 @@ import { historySnapshot } from '../../src/transcripts.js';
 const { RtcTokenBuilder, RtcRole } = agoraToken;
 
 /** Configure the official server SDK. A saved AI Studio pipeline supplies ASR/LLM/TTS. */
-export function createAgoraAgentFactory({ appId, certificate, pipelineId, area = 'AP' }) {
+export function createAgoraAgentFactory({
+  appId,
+  certificate,
+  pipelineId,
+  area = 'AP',
+  enableRtm = false,
+  asrLanguage,
+}) {
   if (!pipelineId || !['AP', 'CN', 'US', 'EU'].includes(area))
     throw new TypeError('Set AGORA_PIPELINE_ID and a valid AGORA_AREA.');
+  if (
+    asrLanguage !== undefined &&
+    (typeof asrLanguage !== 'string' ||
+      !asrLanguage.trim() ||
+      asrLanguage.length > 64 ||
+      /[\r\n]/.test(asrLanguage))
+  )
+    throw new TypeError('Provide a valid ASR language.');
   const client = new AgoraClient({
     area: Area[area],
     appId,
@@ -75,6 +90,10 @@ export function createAgoraAgentFactory({ appId, certificate, pipelineId, area =
                 agent_rtc_uid: botUid,
                 remote_rtc_uids: [uid],
                 enable_string_uid: true,
+                ...(enableRtm
+                  ? { advanced_features: { enable_rtm: true }, parameters: { data_channel: 'rtm' } }
+                  : {}),
+                ...(asrLanguage ? { asr: { language: asrLanguage } } : {}),
                 idle_timeout: 60,
               },
             },

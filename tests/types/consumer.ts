@@ -2,16 +2,28 @@ import {
   AgoraVoiceSession,
   createAgoraVoiceSession,
   createHttpVoiceBackend,
+  createAgoraRtmTranscripts,
   type VoiceBackend,
   type VoiceState,
   type VoiceTranscript,
 } from '../../src/index.js';
+import type { RTMClient } from 'agora-rtm';
+declare const OfficialRTM: typeof RTMClient;
 
 const backend = createHttpVoiceBackend({
   baseURL: 'https://backend.example.test',
   authorization: async () => 'Bearer application-session',
 });
-const session = createAgoraVoiceSession({ backend });
+const session = createAgoraVoiceSession({
+  backend,
+  transcripts: createAgoraRtmTranscripts({ RTM: OfficialRTM }),
+});
+session.addEventListener('transcriptchange', () => {
+  console.log(session.getTranscriptSnapshot()[0]?.status);
+});
+session.addEventListener('transcriptstatechange', () => {
+  console.log(session.getTranscriptState().status);
+});
 session.addEventListener('statechange', () => {
   const state: Readonly<VoiceState> = session.getState();
   console.log(state.media, state.agent, state.audio);

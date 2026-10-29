@@ -128,12 +128,36 @@ export function createHttpVoiceBackend({
         throw new AgoraVoiceError('BACKEND', 'The backend returned an invalid voice session.');
       }
       const { id, whip } = reservation;
+      let initialRtmToken = reservation.rtm?.token;
+      const initialRtmExpiry = reservation.rtm?.tokenExpiresAt;
       let token = whip.token;
       let expiresAt = whip.tokenExpiresAt;
       let refreshing;
       return {
         id,
         lease: reservation.lease,
+        ...(reservation.rtm
+          ? {
+              rtm: {
+                ...reservation.rtm,
+                token: async ({ signal }) => {
+                  if (initialRtmToken && Date.now() < initialRtmExpiry - 10_000) {
+                    const token = initialRtmToken;
+                    initialRtmToken = null;
+                    return token;
+                  }
+                  initialRtmToken = null;
+                  const result = await request(path(id, 'rtm-token'), { signal });
+                  if (typeof result.token !== 'string' || !Number.isFinite(result.tokenExpiresAt))
+                    throw new AgoraVoiceError(
+                      'BACKEND',
+                      'The backend returned an invalid RTM token.',
+                    );
+                  return result.token;
+                },
+              },
+            }
+          : {}),
         whip: {
           ...whip,
           token: async () => {

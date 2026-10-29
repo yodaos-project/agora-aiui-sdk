@@ -43,17 +43,22 @@ from the cloud configuration you provide.
 - **Two-way voice:** send microphone audio and hear AI replies through Agora WHIP and WebRTC.
 - **Call controls:** start, end, mute the microphone or speaker, and adjust volume.
 - **Useful feedback:** read connection states and local/remote audio levels.
-- **Conversation text:** display recognized speech and AI replies from conversation history.
+- **Live conversation text:** receive ASR partial results and streaming AI replies through Agora RTM.
 - **Flexible setup:** use the included session backend, your own backend, or existing temporary credentials.
 - **Ready-to-adapt example:** a compact Ink page for glasses, with color and green-only themes.
 
-The client uses Ink's media APIs and has no additional runtime package dependencies.
+The example takes turns speaking: microphone transmission pauses while the AI
+replies and resumes afterward. The SDK also supports full-duplex conversation
+on hosts with working echo cancellation. See [audio controls](docs/api.md#take-turns-speaking).
+
+The audio-only client uses Ink's media APIs without extra runtime packages.
+Live text adds the optional official Agora RTM module, prepared by the example command.
 JavaScript modules and TypeScript declarations are included.
 
 ## Start with the example
 
 You need Node.js 22+, an Ink host with WHIP and microphone support, an Agora
-project enabled for duplex WHIP, and a published voice agent in Agent Studio.
+project enabled for duplex WHIP and Signaling, and a published voice agent in Agent Studio.
 Agora cloud usage may incur charges under your plan.
 
 ```sh
@@ -131,7 +136,7 @@ this cloud voice integration.
 | Fix silence, a failed connection, or interrupted playback | [Troubleshooting](docs/troubleshooting.md)         |
 | Check test coverage or contribute                         | [Development and verification](docs/validation.md) |
 
-Version 0.1.0 focuses on foreground voice conversations. Word-synchronized captions, RTM messaging,
+Version 0.1.0 focuses on foreground voice conversations. Playback-synchronized word captions, general chat messaging,
 local tool calls, automatic reconnection, and background calling are not included.
 Ink Web has passed repeated real-cloud voice tests; see [verification scope](docs/validation.md#real-cloud-results)
 for host-specific results and remaining checks.

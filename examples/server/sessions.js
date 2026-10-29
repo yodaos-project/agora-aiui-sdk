@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import agoraToken from 'agora-token';
 import { agoraEndpoint, isAgoraUid } from '../../src/agora.js';
 import { createWhipToken } from './token.js';
 
@@ -82,6 +83,20 @@ export function createSessionService({
     });
   }
 
+  function rtmToken(record) {
+    const token = agoraToken.RtcTokenBuilder.buildTokenWithRtm(
+      appId,
+      certificate,
+      record.channel,
+      record.uid,
+      agoraToken.RtcRole.PUBLISHER,
+      tokenLifetime,
+      tokenLifetime,
+    );
+    if (!token) throw new ServiceError(500, 'TOKEN_FAILED');
+    return { token, tokenExpiresAt: now() + tokenLifetime * 1000 };
+  }
+
   function stopRecord(record) {
     record.closing = true;
     if (record.stopped) return Promise.resolve();
@@ -132,6 +147,13 @@ export function createSessionService({
       return {
         id,
         whip: { baseURL, channel: record.channel, uid, ...token(record) },
+        rtm: {
+          appId,
+          channel: record.channel,
+          userId: record.uid,
+          agentUserId: record.botUid,
+          ...rtmToken(record),
+        },
         lease: lease(record),
       };
     },
@@ -203,6 +225,10 @@ export function createSessionService({
 
     refreshToken(id, owner) {
       return token(lookup(id, owner));
+    },
+
+    refreshRtmToken(id, owner) {
+      return rtmToken(lookup(id, owner));
     },
 
     async sweep() {

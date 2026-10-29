@@ -18,6 +18,7 @@ Choose the `ink-open` executable for your operating system and a build with WHIP
 | Ink host                         | Use an Ink build with `WHIPSession`, WebRTC, Web Audio, and microphone support. For desktop, use `ink-open`. |
 | Agora App ID and App Certificate | Find them in your Agora project's settings. The certificate stays on the backend.                            |
 | Duplex WHIP endpoint             | Confirm that Agora has enabled two-way WHIP for your project and region.                                     |
+| Signaling (RTM)                  | Enable Signaling for the same Agora project to receive live conversation text.                               |
 | Published voice pipeline         | Configure and publish a voice agent in Agora Agent Studio.                                                   |
 
 In Studio, first confirm that you can speak to your agent in its test panel.
@@ -118,7 +119,7 @@ host or operating system asks.
 2. Wait for **我在，慢慢说。** and **Agora · 已连接**.
 3. Say a short question in the language configured for your agent.
 4. Listen for the reply. A greeting is optional and depends on your pipeline.
-5. Read the conversation text as turns appear. Use **收起文字** to return to the voice view.
+5. Watch ASR partial results and AI replies update live through RTM. Use **收起文字** to return to the voice view.
 6. Tap **结束通话** (End call) when finished.
 
 Keep Ink in the foreground. If you return from another window and see paused
@@ -130,7 +131,8 @@ moving meters are useful checks, but do not replace listening.
 ## Use another host
 
 - **Ink Web:** open the AIUI Agent in the foreground, allow microphone permission,
-  and use an HTTPS session backend. Add the Web host page's exact origin to
+  and use an HTTPS session backend. Allow a bounded SDK initialization budget such
+  as `scriptExecution: { timeoutMs: 10000 }` on `createInkView`. Add the Web host page's exact origin to
   `ALLOWED_ORIGINS`. See [host requirements](integration.md#host-requirements).
 - **Android or glasses:** deploy a reachable HTTPS backend and change
   `backendURL`. `127.0.0.1` on the device refers to the device itself, not your computer.

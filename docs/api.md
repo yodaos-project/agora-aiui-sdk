@@ -16,12 +16,13 @@ const voice = createAgoraVoiceSession({ backend, timeout: 30000 });
 `new AgoraVoiceSession(options)` is equivalent. Choose exactly one of `backend`
 or `connection`.
 
-| Option           | Meaning                                                                           | Default |
-| ---------------- | --------------------------------------------------------------------------------- | ------- |
-| `backend`        | A `VoiceBackend` that reserves credentials and starts/stops the AI.               | —       |
-| `connection`     | An `AgoraConnection`, or `async ({ signal }) => connection`. Connects audio only. | —       |
-| `timeout`        | Total startup deadline in milliseconds.                                           | `15000` |
-| `cleanupTimeout` | Deadline for each independent cleanup operation, in milliseconds.                 | `5000`  |
+| Option           | Meaning                                                                             | Default       |
+| ---------------- | ----------------------------------------------------------------------------------- | ------------- |
+| `backend`        | A `VoiceBackend` that reserves credentials and starts/stops the AI.                 | —             |
+| `connection`     | An `AgoraConnection`, or `async ({ signal }) => connection`. Connects audio only.   | —             |
+| `timeout`        | Total startup deadline in milliseconds.                                             | `15000`       |
+| `cleanupTimeout` | Deadline for each independent cleanup operation, in milliseconds.                   | `5000`        |
+| `microphoneMode` | `full-duplex`, or `half-duplex` to pause microphone transmission during AI replies. | `full-duplex` |
 
 Both deadlines must be positive finite numbers. The session owns the microphone
 tracks and audio context it creates; this version does not accept caller-provided
@@ -80,6 +81,7 @@ endpoints, and raw backend responses. The SDK does not log automatically.
 | `agent`                            | `not-managed`, `idle`, `starting`, `running`, `stopped`, `unknown`. Backend acknowledgement of cloud AI operations. |
 | `audio`                            | `running`, `suspended`, `closed`. Local audio context; `closed` before creation too.                                |
 | `microphoneMuted` / `speakerMuted` | Boolean mute states, initially `false`.                                                                             |
+| `microphoneSuppressed`             | Automatic microphone gate used by half-duplex mode, independent of manual mute.                                     |
 | `volume`                           | Speaker volume from `0` to `1`, initially `1`.                                                                      |
 | `error`                            | `null` or `{ code, message }`. The message is suitable for display.                                                 |
 | `cleanup`                          | `null` until cleanup completes, then the cleanup report.                                                            |
@@ -87,7 +89,8 @@ endpoints, and raw backend responses. The SDK does not log automatically.
 Do not use `lifecycle: running` or `agent: running` alone to display “audio connected.”
 `agent` does not report whether the AI is currently alive or speaking. Temporary
 media disconnections may recover; terminal failure triggers cleanup. There is no
-automatic reconnect or cloud status event subscription in this version.
+automatic recreation of media sessions or cloud-agent health monitoring in this version.
+RTM text connectivity is reported separately by `getTranscriptState()`.
 
 ## Control audio
 
@@ -105,7 +108,78 @@ silence. The remote meter measures before speaker volume/mute, so it can move
 while your speaker is muted. For diagnostics, polling stats every 2–3 seconds
 is enough; clear any UI timers on stop/unload.
 
-## Read conversation text
+### Take turns speaking
+
+The example sets `microphoneMode: 'half-duplex'`: the AI's thinking/speaking
+activity and actual received audio temporarily pause microphone transmission.
+It resumes after playback becomes quiet, preserving the user's manual mute.
+The microphone button shows **等我说完** during that pause. Wait for the AI to
+finish before speaking. Suspended playback also pauses transmission in this mode.
+
+This avoids feeding speaker audio or speech during the reply back to the AI on
+hosts without echo cancellation. It is a turn-taking policy, not echo cancellation.
+Keep the default `full-duplex` for interruption-capable conversations on hosts
+with working echo cancellation or headphones, and enable interruption in the
+cloud pipeline. ASR results already produced are still displayed accurately;
+the SDK does not remove text based on when a message arrives.
+
+## Display live conversation text
+
+Use the official RTM constructor included by `npm run example:prepare`:
+
+```js
+import { createAgoraVoiceSession, createAgoraRtmTranscripts } from './lib/sdk/index.js';
+import AgoraRTM from './lib/sdk/rtm-vendor.js';
+
+const transcriptSource = createAgoraRtmTranscripts({ RTM: AgoraRTM.RTM });
+const voice = createAgoraVoiceSession({ backend, transcripts: transcriptSource, timeout: 45000 });
+voice.addEventListener('transcriptchange', () => {
+  const messages = voice.getTranscriptSnapshot();
+  for (const message of messages) console.log(message.role, message.text, message.status);
+});
+voice.addEventListener('transcriptstatechange', () => {
+  console.log(voice.getTranscriptState().status);
+});
+```
+
+The managed backend reservation must include `rtm` credentials. `start()` logs in
+and subscribes before starting the cloud AI. Text arrives through RTM events;
+reading `getTranscriptSnapshot()` is synchronous and makes no HTTP request.
+Replace the displayed list on each event. Partial text replaces the earlier
+version of the same turn; do not append every update as a new message.
+Keep `transcriptSource` across consecutive calls and await `voice.stop()` before
+reusing it. For a fixed account, it reuses the logged-out RTM client because the
+official SDK rejects a second constructor for the same account. Use a separate
+source for each fixed account; rotating session accounts retain only the latest client.
+
+Each `VoiceTranscript` has `id`, `role` (`user` or `assistant`), `text`, and
+`interrupted`. RTM messages also have `status`: `in-progress`, `final`, or
+`interrupted`. ASR partial results appear before the final recognized sentence;
+AI text updates as the service produces it. The service's ASR processing time
+still affects first-text latency. These events do not synchronize words to local
+audio playback or confirm which words were heard.
+
+`getTranscriptState()` returns `{ status, error }`. Status is `disabled`,
+`connecting`, `connected`, `disconnected`, `failed`, or `closed`. Text errors are
+separate from `getState().error` and do not end an established audio call.
+RTM setup defaults to a 15-second deadline; change it with
+`createAgoraRtmTranscripts({ RTM, timeout })`. RTM setup is also within the
+session's overall startup deadline.
+
+Snapshots retain at most 20 messages, 2,000 characters per message and 12,000
+characters in total. Long text is truncated. The example shows newest messages
+first. Hiding text keeps the bounded live subscription so showing it again does
+not lose messages. `stop()` removes listeners and logs out the owned RTM client;
+its cleanup report includes `transcripts` when live text was configured.
+
+The RTM constructor is injected, so the base client SDK does not load it for
+audio-only sessions. The example packages RTM 2.3.0 with a scoped Ink loader;
+it does not load Agora's RTC SDK or change Ink's global APIs. On Ink Web, allow
+time for this large SDK to initialize, for example
+`createInkView({ canvas, scriptExecution: { timeoutMs: 10000 } })`.
+Keep the execution budget bounded.
+
+## Read history on demand
 
 ```js
 const transcripts = await voice.getTranscripts();
@@ -120,17 +194,14 @@ while a managed session is running. Each `VoiceTranscript` has `id`, `role`
 speech; assistant text is the recorded AI reply. It can appear before playback
 finishes and does not provide word-level timing or confirm which words were heard.
 
-The method does not poll by itself. The example refreshes every two seconds after
-the previous read finishes, backs off on errors, and cancels pending reads on stop
-or unload. It displays the newest messages first; hiding text also pauses polling.
-Snapshots retain at most 20 messages, 2,000 characters per message and
-12,000 characters in total. Long text is truncated.
+This optional history method makes one backend request. The example does not use
+it for live text and never polls history. History has the same snapshot limits
+as live text, without a live `status` field.
 
 A backend must implement optional `getTranscripts`. Direct mode and older custom
 backends reject with `UNSUPPORTED`. Read failures use `TRANSCRIPTS` and do not end
 the audio call or change its error state. A caller's signal cancels only this read;
 ending the call also cancels outstanding reads. Retry only while the call is active.
-For live word-by-word captions, use a separate transcript messaging integration.
 
 ## Configure a direct connection
 
