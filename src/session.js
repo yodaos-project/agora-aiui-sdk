@@ -1,4 +1,5 @@
 import { agoraEndpoint, whipOptions } from './agora.js';
+import { transcriptSnapshot } from './transcripts.js';
 import {
   AgoraVoiceError,
   acquire,
@@ -413,6 +414,38 @@ export class AgoraVoiceSession extends EventTarget {
   async getStats() {
     if (!this._whip || this._controller.signal.aborted) throw cancelled();
     return this._whip.peerConnection.getStats();
+  }
+
+  /** Read ASR and assistant history text. This is not a word-synchronized TTS feed. */
+  async getTranscripts({ signal } = {}) {
+    const backend = this._options.backend;
+    if (typeof backend?.getTranscripts !== 'function') {
+      throw new AgoraVoiceError('UNSUPPORTED', 'This backend does not provide conversation text.');
+    }
+    if (this._lifecycle !== 'running' || !this._reservation) throw cancelled();
+    const controller = new AbortController();
+    const parent = this._controller.signal;
+    const abort = () => controller.abort();
+    parent.addEventListener('abort', abort, { once: true });
+    signal?.addEventListener('abort', abort, { once: true });
+    if (parent.aborted || signal?.aborted) abort();
+    const timer = setTimeout(abort, this._timeout);
+    try {
+      checkSignal(controller.signal);
+      const snapshot = await acquire(
+        backend.getTranscripts({ sessionId: this._reservation.id, signal: controller.signal }),
+        controller.signal,
+      );
+      return transcriptSnapshot(snapshot);
+    } catch {
+      if (parent.aborted || signal?.aborted) throw cancelled();
+      throw new AgoraVoiceError('TRANSCRIPTS', 'Conversation text could not be loaded.');
+    } finally {
+      clearTimeout(timer);
+      parent.removeEventListener('abort', abort);
+      signal?.removeEventListener('abort', abort);
+      controller.abort();
+    }
   }
 
   /** Stop capture synchronously, then independently attempt remote and audio cleanup. */

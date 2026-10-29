@@ -43,6 +43,7 @@ from the cloud configuration you provide.
 - **Two-way voice:** send microphone audio and hear AI replies through Agora WHIP and WebRTC.
 - **Call controls:** start, end, mute the microphone or speaker, and adjust volume.
 - **Useful feedback:** read connection states and local/remote audio levels.
+- **Conversation text:** display recognized speech and AI replies from conversation history.
 - **Flexible setup:** use the included session backend, your own backend, or existing temporary credentials.
 - **Ready-to-adapt example:** a compact Ink page for glasses, with color and green-only themes.
 
@@ -130,7 +131,7 @@ this cloud voice integration.
 | Fix silence, a failed connection, or interrupted playback | [Troubleshooting](docs/troubleshooting.md)         |
 | Check test coverage or contribute                         | [Development and verification](docs/validation.md) |
 
-Version 0.1.0 focuses on foreground voice conversations. Captions, RTM messaging,
+Version 0.1.0 focuses on foreground voice conversations. Word-synchronized captions, RTM messaging,
 local tool calls, automatic reconnection, and background calling are not included.
 Ink Web has passed repeated real-cloud voice tests; see [verification scope](docs/validation.md#real-cloud-results)
 for host-specific results and remaining checks.

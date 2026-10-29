@@ -105,6 +105,33 @@ silence. The remote meter measures before speaker volume/mute, so it can move
 while your speaker is muted. For diagnostics, polling stats every 2–3 seconds
 is enough; clear any UI timers on stop/unload.
 
+## Read conversation text
+
+```js
+const transcripts = await voice.getTranscripts();
+for (const message of transcripts) {
+  console.log(message.role, message.text, message.interrupted);
+}
+```
+
+`getTranscripts({ signal? })` returns a read-only conversation-history snapshot
+while a managed session is running. Each `VoiceTranscript` has `id`, `role`
+(`user` or `assistant`), `text`, and `interrupted`. User text is the recognized
+speech; assistant text is the recorded AI reply. It can appear before playback
+finishes and does not provide word-level timing or confirm which words were heard.
+
+The method does not poll by itself. The example refreshes every two seconds after
+the previous read finishes, backs off on errors, and cancels pending reads on stop
+or unload. It displays the newest messages first; hiding text also pauses polling.
+Snapshots retain at most 20 messages, 2,000 characters per message and
+12,000 characters in total. Long text is truncated.
+
+A backend must implement optional `getTranscripts`. Direct mode and older custom
+backends reject with `UNSUPPORTED`. Read failures use `TRANSCRIPTS` and do not end
+the audio call or change its error state. A caller's signal cancels only this read;
+ending the call also cancels outstanding reads. Retry only while the call is active.
+For live word-by-word captions, use a separate transcript messaging integration.
+
 ## Configure a direct connection
 
 An `AgoraConnection` contains:
@@ -162,17 +189,18 @@ on demand near their reported expiry; it does not reconnect existing media.
 `start()`; failures during a call appear through `statechange` and `getState().error`.
 Invalid construction/configuration arguments may also throw ordinary JavaScript errors.
 
-| Code            | What to check                                        |
-| --------------- | ---------------------------------------------------- |
-| `UNSUPPORTED`   | Ink host capabilities.                               |
-| `CONFIGURATION` | Connection fields and temporary credentials.         |
-| `BACKEND`       | Backend connectivity, authentication, and responses. |
-| `MICROPHONE`    | Permission and microphone availability.              |
-| `AUDIO`         | Playback activation and foreground state.            |
-| `MEDIA`         | WHIP/RTC connection and network access.              |
-| `AGENT`         | Cloud AI startup through your backend.               |
-| `TIMEOUT`       | Startup deadline and network/service availability.   |
-| `ABORTED`       | Startup was cancelled.                               |
-| `LEASE`         | Backend session renewal failed.                      |
+| Code            | What to check                                                  |
+| --------------- | -------------------------------------------------------------- |
+| `UNSUPPORTED`   | Ink host capabilities.                                         |
+| `CONFIGURATION` | Connection fields and temporary credentials.                   |
+| `BACKEND`       | Backend connectivity, authentication, and responses.           |
+| `MICROPHONE`    | Permission and microphone availability.                        |
+| `AUDIO`         | Playback activation and foreground state.                      |
+| `MEDIA`         | WHIP/RTC connection and network access.                        |
+| `AGENT`         | Cloud AI startup through your backend.                         |
+| `TIMEOUT`       | Startup deadline and network/service availability.             |
+| `ABORTED`       | Startup was cancelled.                                         |
+| `TRANSCRIPTS`   | Conversation text could not be read; the audio call continues. |
+| `LEASE`         | Backend session renewal failed.                                |
 
 For a diagnosis workflow, see [troubleshooting](troubleshooting.md).

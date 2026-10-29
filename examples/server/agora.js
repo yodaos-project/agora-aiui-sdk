@@ -1,6 +1,7 @@
 import { AgoraClient, Area } from 'agora-agents';
 import agoraToken from 'agora-token';
 import { isAgoraUid } from '../../src/agora.js';
+import { historySnapshot } from '../../src/transcripts.js';
 
 const { RtcTokenBuilder, RtcRole } = agoraToken;
 
@@ -55,6 +56,11 @@ export function createAgoraAgentFactory({ appId, certificate, pipelineId, area =
     let agentId;
     let uncertainUntil = 0;
     return {
+      async getTranscripts() {
+        if (!agentId) return [];
+        const history = await client.agents.getHistory({ appid: appId, agentId }, authorization());
+        return historySnapshot(history.contents);
+      },
       async start() {
         try {
           const rtcToken = token();

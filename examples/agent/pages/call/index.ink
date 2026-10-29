@@ -12,6 +12,9 @@
       bar1: 3,
       bar2: 3,
       bar3: 3,
+      transcripts: [],
+      showTranscripts: true,
+      transcriptNote: '',
     },
     onLoad() {
       this.unloaded = false;
@@ -23,6 +26,7 @@
     onUnload() {
       this.unloaded = true;
       this.clearLevelTimer();
+      this.clearTranscripts();
       if (this.voice && this.update) this.voice.removeEventListener('statechange', this.update);
       void this.voice?.stop();
     },
@@ -48,7 +52,10 @@
     async connect() {
       if (this.unloaded || this.data.active || this.data.busy) return;
       this.clearLevelTimer();
+      this.clearTranscripts();
       if (this.voice && this.update) this.voice.removeEventListener('statechange', this.update);
+      this.transcriptKey = '';
+      this.setData({ transcripts: [], transcriptNote: '' });
       this.startedAt = 0;
       this.speakingUntil = 0;
       const voice = createAgoraVoiceSession({ backend: this.backend, timeout: 30000 });
@@ -58,6 +65,7 @@
         const state = voice.getState();
         if (state.lifecycle !== 'running') {
           this.clearLevelTimer();
+          this.clearTranscripts();
           this.speakingUntil = 0;
         }
         this.renderCall(state, Date.now() < this.speakingUntil);
@@ -70,6 +78,7 @@
         this.startedAt = Date.now();
         this.levelTimer = setInterval(() => this.refreshAudio(voice), 200);
         this.refreshAudio(voice);
+        this.startTranscripts(voice);
       } catch {
         if (this.voice === voice) this.update();
       }
@@ -92,6 +101,61 @@
         3 + Math.round(energy * 17),
       ]);
     },
+    clearTranscripts() {
+      if (this.transcriptTimer != null) clearTimeout(this.transcriptTimer);
+      this.transcriptTimer = null;
+      this.transcriptController?.abort();
+      this.transcriptController = null;
+    },
+    startTranscripts(voice) {
+      this.clearTranscripts();
+      if (!this.data.showTranscripts) return;
+      const controller = new AbortController();
+      this.transcriptController = controller;
+      let delay = 2000;
+      const poll = async () => {
+        if (controller.signal.aborted || this.unloaded || this.voice !== voice) return;
+        let retry = true;
+        try {
+          const transcripts = await voice.getTranscripts({ signal: controller.signal });
+          if (controller.signal.aborted || this.unloaded || this.voice !== voice) return;
+          const key = JSON.stringify(transcripts);
+          if (key !== this.transcriptKey) {
+            this.transcriptKey = key;
+            this.setData({
+              transcripts: [...transcripts].reverse(),
+              transcriptNote: '',
+            });
+          } else if (this.data.transcriptNote) this.setData({ transcriptNote: '' });
+          delay = 2000;
+        } catch (error) {
+          if (controller.signal.aborted || this.unloaded || this.voice !== voice) return;
+          retry = error.code !== 'UNSUPPORTED';
+          this.setData({
+            transcriptNote: retry ? '文字暂不可用，语音可以继续。' : '当前服务暂未提供对话文字。',
+          });
+          delay = Math.min(30000, delay * 2);
+        } finally {
+          if (
+            retry &&
+            !controller.signal.aborted &&
+            !this.unloaded &&
+            this.voice === voice &&
+            voice.getState().lifecycle === 'running'
+          ) {
+            this.transcriptTimer = setTimeout(poll, delay);
+          }
+        }
+      };
+      void poll();
+    },
+    toggleTranscripts() {
+      const showTranscripts = !this.data.showTranscripts;
+      this.setData({ showTranscripts });
+      if (showTranscripts && this.voice?.getState().lifecycle === 'running')
+        this.startTranscripts(this.voice);
+      else this.clearTranscripts();
+    },
     toggleMicrophone() {
       if (this.data.canControl) this.voice?.setMicrophoneMuted(!this.data.micMuted);
     },
@@ -111,6 +175,7 @@
     },
     stop() {
       this.clearLevelTimer();
+      this.clearTranscripts();
       void this.voice?.stop();
     },
   };
@@ -120,7 +185,9 @@
     <view class="header">
       <view class="identity">
         <text class="name">小语</text>
-        <text class="role">AI 语音伙伴</text>
+        <button class="transcript-toggle" bindtap="toggleTranscripts">
+          <text>{{showTranscripts ? '收起文字' : '显示文字'}}</text>
+        </button>
       </view>
       <view class="connection {{connected ? 'online' : ''}}">
         <view class="connection-dot"></view>
@@ -129,7 +196,7 @@
       </view>
     </view>
 
-    <view class="conversation">
+    <view ink:if="{{!showTranscripts || !transcripts.length}}" class="conversation">
       <view class="avatar">
         <view class="avatar-inner {{phase === 'speaking' ? 'responding' : ''}}">
           <image class="portrait" src="/assets/companion.svg" mode="aspectFit" />
@@ -142,7 +209,9 @@
           disabled="{{!canResume}}"
           bindtap="resumeAudio"
         >
-          <text class="hint-copy {{canResume ? 'resume-copy' : ''}}">{{hint}}</text>
+          <text class="hint-copy {{canResume ? 'resume-copy' : ''}}"
+            >{{showTranscripts && transcriptNote ? transcriptNote : hint}}</text
+          >
         </button>
         <view class="voice-signal">
           <view
@@ -169,6 +238,20 @@
       </view>
     </view>
 
+    <scroll-view ink:else class="transcripts" scroll-y="true">
+      <view
+        class="message {{item.role === 'user' ? 'user-message' : 'assistant-message'}}"
+        ink:for="{{transcripts}}"
+        ink:key="id"
+      >
+        <text class="message-author"
+          >{{item.role === 'user' ? '你说的' : '小语'}}{{item.interrupted ? ' · 已打断' : ''}}</text
+        >
+        <text class="message-text">{{item.text}}</text>
+      </view>
+      <text ink:if="{{transcriptNote}}" class="transcript-note">{{transcriptNote}}</text>
+    </scroll-view>
+
     <view ink:if="{{active}}" class="controls">
       <button
         ink:if="{{canControl}}"
@@ -183,12 +266,19 @@
         />
         <text>{{micMuted ? '开麦' : '静音'}}</text>
       </button>
+      <button
+        ink:if="{{canResume && showTranscripts && transcripts.length}}"
+        class="control resume-action"
+        bindtap="resumeAudio"
+      >
+        <text>继续聊天</text>
+      </button>
       <button class="control end" disabled="{{phase === 'stopping'}}" bindtap="stop">
         <image class="control-icon" src="/assets/end.svg" mode="aspectFit" />
         <text>{{phase === 'connecting' ? '取消' : '结束通话'}}</text>
       </button>
       <button
-        ink:if="{{canControl}}"
+        ink:if="{{canControl && !(canResume && showTranscripts && transcripts.length)}}"
         class="control {{speakerMuted ? 'is-muted' : ''}}"
         disabled="{{!canControl}}"
         bindtap="toggleSpeaker"
@@ -389,6 +479,45 @@
     color: var(--color-primary);
     font-size: 14px;
     line-height: 20px;
+  }
+  .resume-action {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+  .transcript-toggle {
+    padding: 0;
+    border: none;
+    background-color: transparent;
+    color: var(--color-primary);
+  }
+  .transcript-toggle text {
+    font-size: 12px;
+  }
+  .transcripts {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+  }
+  .message {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 0;
+  }
+  .message-author {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+  }
+  .assistant-message .message-author {
+    color: var(--color-primary);
+  }
+  .message-text {
+    font-size: 16px;
+    line-height: 23px;
+    color: var(--color-text-primary);
+  }
+  .transcript-note {
+    font-size: 12px;
+    color: var(--color-text-secondary);
   }
   @media (max-height: 220px) {
     .screen {

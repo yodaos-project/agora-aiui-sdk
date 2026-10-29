@@ -51,6 +51,14 @@ export interface VoiceReservation {
   lease?: VoiceLease;
 }
 
+/** A bounded conversation-history message, without word or playback timing. */
+export interface VoiceTranscript {
+  readonly id: string;
+  readonly role: 'user' | 'assistant';
+  readonly text: string;
+  readonly interrupted: boolean;
+}
+
 export interface VoiceBackend {
   /** Reserve credentials only. Do not start the cloud agent here. */
   createSession(options: { signal: AbortSignal }): Promise<VoiceReservation>;
@@ -61,6 +69,11 @@ export interface VoiceBackend {
     sessionId: string;
     signal: AbortSignal;
   }): Promise<{ lease: VoiceLease }>;
+  /** Optional ASR/assistant history snapshot. A failure must not end the audio call. */
+  getTranscripts?(options: {
+    sessionId: string;
+    signal: AbortSignal;
+  }): Promise<readonly VoiceTranscript[]>;
 }
 
 interface CommonVoiceOptions {
@@ -101,6 +114,8 @@ export class AgoraVoiceSession extends EventTarget {
   /** Local and remote pre-speaker-gain levels in dBFS, clamped to [-60, 0]. */
   getAudioLevels(): { local: number; remote: number };
   getStats(): Promise<RTCStatsReport>;
+  /** Fetch history while running; callers choose polling. Does not synchronize text to audio. */
+  getTranscripts(options?: { signal?: AbortSignal }): Promise<readonly VoiceTranscript[]>;
 }
 
 export function createAgoraVoiceSession(options: AgoraVoiceOptions): AgoraVoiceSession;

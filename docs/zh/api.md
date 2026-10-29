@@ -95,6 +95,30 @@ voice.addEventListener('statechange', () => {
 远端电平在扬声器音量和静音之前测量，因此静音时仍可能跳动。
 诊断统计每 2–3 秒读取一次即可，结束或卸载时清除页面定时器。
 
+## 读取对话文字
+
+```js
+const transcripts = await voice.getTranscripts();
+for (const message of transcripts) {
+  console.log(message.role, message.text, message.interrupted);
+}
+```
+
+`getTranscripts({ signal? })` 在后端管理的会话运行期间返回只读的对话记录快照。
+每条 `VoiceTranscript` 包含 `id`、`role`（`user` 或 `assistant`）、`text` 和 `interrupted`。
+用户文字是语音识别结果，助手文字是记录中的 AI 回复。
+文字可能在播放完成前出现，不提供逐字时间，也不代表这些字都已经播放给用户。
+
+这个方法不会自行轮询。示例在上一次读取结束两秒后刷新，失败时降低刷新频率。
+最新消息显示在前面，收起文字会暂停刷新。
+结束或卸载时取消待完成的请求。最多保留 20 条消息，每条最多 2,000 个字符，
+总计最多 12,000 个字符；过长内容会截断。
+
+后端需要实现可选的 `getTranscripts`。直接连接和未实现此方法的旧后端会返回 `UNSUPPORTED`。
+读取失败使用 `TRANSCRIPTS`，不会结束语音通话，也不会改动通话错误状态。
+调用方的 signal 只取消当前读取；结束通话也会取消未完成的读取。
+请只在通话仍运行时重试。逐字实时字幕需要另接转写消息通道。
+
 ## 配置直接连接
 
 `AgoraConnection` 示例：
@@ -163,5 +187,6 @@ const backend = createHttpVoiceBackend({
 | `TIMEOUT`       | 启动超时、网络或服务是否可用。          |
 | `ABORTED`       | 启动被取消。                            |
 | `LEASE`         | 后端会话续约失败。                      |
+| `TRANSCRIPTS`   | 对话文字读取失败，语音通话可以继续。    |
 
 排查顺序见[常见问题](troubleshooting.md)。

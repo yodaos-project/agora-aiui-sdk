@@ -83,12 +83,16 @@ App Certificate 和模型 API Key 保留在服务端。
 实现下方 HTTP 接口后，可以直接使用 `createHttpVoiceBackend`。
 如果已有不同的业务接口，实现 [src/index.d.ts](../../src/index.d.ts) 中的 `VoiceBackend` 方法即可：
 
-| 方法                                  | 负责什么                                             |
-| ------------------------------------- | ---------------------------------------------------- |
-| `createSession({ signal })`           | 预留凭证，返回 `{ id, whip, lease? }`，先不启动 AI。 |
-| `startAgent({ sessionId, signal })`   | AIUI Agent 的媒体连接完成后，启动 AI。               |
-| `stopSession({ sessionId, signal })`  | 停止 AI、释放预留会话，也要处理较晚才完成的启动。    |
-| `renewSession({ sessionId, signal })` | 返回 `{ lease }`。会话包含租约时必须实现。           |
+| 方法                                    | 负责什么                                             |
+| --------------------------------------- | ---------------------------------------------------- |
+| `createSession({ signal })`             | 预留凭证，返回 `{ id, whip, lease? }`，先不启动 AI。 |
+| `startAgent({ sessionId, signal })`     | AIUI Agent 的媒体连接完成后，启动 AI。               |
+| `stopSession({ sessionId, signal })`    | 停止 AI、释放预留会话，也要处理较晚才完成的启动。    |
+| `renewSession({ sessionId, signal })`   | 返回 `{ lease }`。会话包含租约时必须实现。           |
+| `getTranscripts({ sessionId, signal })` | 返回对话消息。可选，用于显示 ASR 和 AI 回复文字。    |
+
+可选的文字方法返回规范化的 ASR 和助手消息。参考实现用服务端新凭证读取 Agora 对话记录，
+不向客户端返回供应商内部元数据或签名凭证。
 
 ## HTTP 接口
 
@@ -135,6 +139,27 @@ HTTP 接口时间戳使用 Unix **毫秒**，JWT 的 `exp` 使用**秒**。
 `agent: running` 表示启动请求被确认，不是持续的在线状态通知。
 参考后端发生错误时，以非 2xx 状态返回 `{ "error": "CODE" }`。
 客户端显示安全的 `BACKEND` 错误，需要具体原因时查看服务端日志。
+
+### 读取对话文字
+
+`POST /voice/sessions/:id/transcripts` 返回 HTTP 200：
+
+```json
+{
+  "transcripts": [
+    { "id": "user:1", "role": "user", "text": "Hello.", "interrupted": false },
+    { "id": "assistant:1", "role": "assistant", "text": "Hi!", "interrupted": false }
+  ]
+}
+```
+
+这个可选接口读取运行中 AI 的对话记录，读取前后都检查用户归属、会话是否有效。
+同一会话的并发读取会共享一次云端请求。已结束的会话不能继续查询。
+自定义 `VoiceBackend.getTranscripts({ sessionId, signal })` 直接返回消息数组，
+不需要 HTTP 的 `transcripts` 外层对象。
+
+示例每两秒刷新。这是对话文字，不是 RTM 消息流，也不是与 TTS 逐字同步的字幕。
+大规模部署或实时字幕应使用事件、消息通道，并遵守你的服务 API 频率限制。
 
 ## 部署前需要调整什么？
 

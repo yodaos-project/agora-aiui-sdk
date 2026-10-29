@@ -118,7 +118,8 @@ host or operating system asks.
 2. Wait for **我在，慢慢说。** and **Agora · 已连接**.
 3. Say a short question in the language configured for your agent.
 4. Listen for the reply. A greeting is optional and depends on your pipeline.
-5. Tap **结束通话** (End call) when finished.
+5. Read the conversation text as turns appear. Use **收起文字** to return to the voice view.
+6. Tap **结束通话** (End call) when finished.
 
 Keep Ink in the foreground. If you return from another window and see paused
 audio, tap the **继续聊天** resume prompt to resume playback.

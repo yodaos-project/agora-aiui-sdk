@@ -56,13 +56,15 @@ export function createVoiceHandler({ service, authorize, allowedOrigins = [] }) 
       if (typeof owner !== 'string' || !owner) throw new ServiceError(401, 'UNAUTHORIZED');
       const path = new URL(request.url, 'http://server.invalid').pathname;
       if (path === '/voice/sessions') return reply(201, await service.createSession(owner));
-      const match = /^\/voice\/sessions\/([\da-f-]{36})\/(start|stop|renew|token)$/.exec(path);
+      const match =
+        /^\/voice\/sessions\/([\da-f-]{36})\/(start|stop|renew|token|transcripts)$/.exec(path);
       if (!match) throw new ServiceError(404, 'NOT_FOUND');
       const operations = {
         start: 'startAgent',
         stop: 'stopSession',
         renew: 'renewSession',
         token: 'refreshToken',
+        transcripts: 'getTranscripts',
       };
       reply(200, await service[operations[match[2]]](match[1], owner));
     } catch (error) {

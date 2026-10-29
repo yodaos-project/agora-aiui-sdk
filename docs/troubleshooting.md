@@ -78,8 +78,9 @@ a session backend at runtime. Keep signing certificates off the client.
 
 ## Can I add captions, messages, or tools?
 
-Version 0.1.0 provides voice audio and call controls. Captions, RTM messages,
-AI semantic events, and local tool execution need additional integration.
+The SDK can display ASR and AI reply text from conversation history. Live
+word-synchronized captions, RTM messages, AI semantic events, and local tool
+execution need additional integration.
 Audio transport does not itself create a messaging channel.
 
 ## What should I include in a support report?

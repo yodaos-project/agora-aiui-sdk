@@ -10,6 +10,7 @@ import { createAgoraAgentFactory } from '../examples/server/agora.js';
 import { createWhipToken } from '../examples/server/token.js';
 import { createHttpVoiceBackend, createAgoraVoiceSession } from '../src/index.js';
 import { deferred, fakeRuntime, tick } from './helpers.js';
+import { transcriptSnapshot } from '../src/transcripts.js';
 
 const credentials = { appId: '1'.repeat(32), certificate: '2'.repeat(32) };
 const demoToken = 'test-business-api-token-not-a-real-secret';
@@ -300,7 +301,14 @@ test('official Agora server SDK preserves string accounts in join, auth and RTC 
       JSON.stringify(
         request.method === 'POST' && request.url.endsWith('/join')
           ? { agent_id: 'test-cloud-agent' }
-          : {},
+          : request.url.endsWith('/history')
+            ? {
+                contents: [
+                  { role: 'user', turn_id: 1, content: 'Hi.', metadata: { private: 'hidden' } },
+                  { role: 'assistant', turn_id: 1, content: 'Hello.' },
+                ],
+              }
+            : {},
       ),
     );
   });
@@ -323,9 +331,15 @@ test('official Agora server SDK preserves string accounts in join, auth and RTC 
     maxDurationSeconds: 600,
   });
   await bot.start();
+  const text = await bot.getTranscripts();
+  assert.deepEqual(
+    text.map((entry) => entry.text),
+    ['Hi.', 'Hello.'],
+  );
+  assert(!JSON.stringify(text).includes('hidden'));
   await assert.rejects(bot.stop(), { statusCode: 500 });
   await bot.stop();
-  assert.equal(requests.length, 3);
+  assert.equal(requests.length, 4);
   assert.match(requests[0].path, /\/projects\/[\da-f]+\/join$/);
   assert.match(requests[0].authorization, /^agora token=/);
   const payload = requests[0].body;
@@ -346,6 +360,53 @@ test('official Agora server SDK preserves string accounts in join, auth and RTC 
     assert.equal(parsed.getServices(1)[0].__uid.toString(), 'agent-test');
     assert.equal(parsed.getServices(2)[0].__user_id.toString(), 'agent-test');
   }
-  assert.match(requests[1].path, /\/agents\/test-cloud-agent\/leave$/);
-  assert.equal(requests[2].path, requests[1].path);
+  assert.match(requests[1].path, /\/agents\/test-cloud-agent\/history$/);
+  assert.equal(requests[1].method, 'GET');
+  assert.match(requests[2].path, /\/agents\/test-cloud-agent\/leave$/);
+  assert.equal(requests[3].path, requests[2].path);
+});
+
+test('transcript HTTP reads enforce ownership, coalesce requests and redact closed reservations', async (t) => {
+  const runtime = fakeRuntime(t);
+  let reads = 0;
+  let release;
+  const { store } = service({
+    createAgent: () => ({
+      async start() {},
+      async stop() {},
+      async getTranscripts() {
+        reads++;
+        if (release) await release.promise;
+        return transcriptSnapshot([{ id: 'assistant:1', role: 'assistant', text: 'Hello.' }]);
+      },
+    }),
+  });
+  t.after(() => store.close());
+  const baseURL = await listen(
+    t,
+    createVoiceHandler({ service: store, authorize: bearerAuthorizer(demoToken) }),
+  );
+  const backend = createHttpVoiceBackend({ baseURL, authorization: `Bearer ${demoToken}` });
+  const voice = createAgoraVoiceSession({ backend });
+  t.after(() => voice.stop());
+  await voice.start();
+  const text = await voice.getTranscripts();
+  assert.equal(text[0].text, 'Hello.');
+  const other = store.createSession('alice');
+  await store.startAgent(other.id, 'alice');
+  await assert.rejects(store.getTranscripts(other.id, 'someone-else'), { status: 404 });
+  release = deferred();
+  const first = store.getTranscripts(other.id, 'alice');
+  const second = store.getTranscripts(other.id, 'alice');
+  const rejected = Promise.all([
+    assert.rejects(first, { status: 410 }),
+    assert.rejects(second, { status: 410 }),
+  ]);
+  await tick();
+  assert.equal(reads, 2, 'parallel readers share one upstream history request');
+  await store.stopSession(other.id, 'alice');
+  release.resolve();
+  await rejected;
+  await voice.stop();
+  await assert.rejects(voice.getTranscripts(), { code: 'ABORTED' });
 });

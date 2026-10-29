@@ -173,6 +173,28 @@ export function createSessionService({
       return { stopped: true };
     },
 
+    async getTranscripts(id, owner) {
+      const record = lookup(id, owner);
+      if (typeof record.agent?.getTranscripts !== 'function') {
+        throw new ServiceError(501, 'TRANSCRIPTS_UNAVAILABLE');
+      }
+      try {
+        if (!record.transcriptPromise) {
+          record.transcriptPromise = Promise.resolve()
+            .then(() => record.agent.getTranscripts())
+            .finally(() => {
+              record.transcriptPromise = null;
+            });
+        }
+        const transcripts = await record.transcriptPromise;
+        lookup(id, owner);
+        return { transcripts };
+      } catch (error) {
+        if (error instanceof ServiceError) throw error;
+        throw new ServiceError(502, 'TRANSCRIPTS_UNAVAILABLE');
+      }
+    },
+
     renewSession(id, owner) {
       const record = lookup(id, owner);
       record.expiresAt = Math.min(now() + leaseMs, record.deadline);

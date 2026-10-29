@@ -4,6 +4,7 @@ import {
   createHttpVoiceBackend,
   type VoiceBackend,
   type VoiceState,
+  type VoiceTranscript,
 } from '../../src/index.js';
 
 const backend = createHttpVoiceBackend({
@@ -20,6 +21,10 @@ session.setMicrophoneMuted(true);
 session.setSpeakerMuted(false);
 session.setVolume(0.8);
 await session.getStats();
+const transcripts: readonly VoiceTranscript[] = await session.getTranscripts();
+for (const entry of transcripts) console.log(entry.role, entry.text, entry.interrupted);
+// @ts-expect-error transcript messages are read-only
+transcripts[0].text = 'changed';
 await session.resumeAudio();
 await session.stop();
 

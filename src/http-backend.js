@@ -1,4 +1,5 @@
 import { AgoraVoiceError, acquire, checkSignal, positiveMilliseconds } from './errors.js';
+import { transcriptSnapshot } from './transcripts.js';
 
 const LIMIT = 64 * 1024;
 
@@ -173,6 +174,10 @@ export function createHttpVoiceBackend({
     },
     renewSession({ sessionId, signal }) {
       return request(path(sessionId, 'renew'), { signal });
+    },
+    async getTranscripts({ sessionId, signal }) {
+      const result = await request(path(sessionId, 'transcripts'), { signal });
+      return transcriptSnapshot(result.transcripts);
     },
   });
 }

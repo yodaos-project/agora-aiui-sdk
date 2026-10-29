@@ -96,12 +96,17 @@ Use `createHttpVoiceBackend` if you implement the HTTP contract below. If your
 service already has another API, implement the `VoiceBackend` methods from
 [src/index.d.ts](../src/index.d.ts):
 
-| Method                                | Responsibility                                                                   |
-| ------------------------------------- | -------------------------------------------------------------------------------- |
-| `createSession({ signal })`           | Reserve credentials and return `{ id, whip, lease? }`. Do not start the AI yet.  |
-| `startAgent({ sessionId, signal })`   | Start the AI after the AIUI Agent's media is connected.                          |
-| `stopSession({ sessionId, signal })`  | Stop the AI and release the reservation. Also handle a start that finishes late. |
-| `renewSession({ sessionId, signal })` | Return `{ lease }`. Required if reservations include a lease.                    |
+| Method                                  | Responsibility                                                                   |
+| --------------------------------------- | -------------------------------------------------------------------------------- |
+| `createSession({ signal })`             | Reserve credentials and return `{ id, whip, lease? }`. Do not start the AI yet.  |
+| `startAgent({ sessionId, signal })`     | Start the AI after the AIUI Agent's media is connected.                          |
+| `stopSession({ sessionId, signal })`    | Stop the AI and release the reservation. Also handle a start that finishes late. |
+| `renewSession({ sessionId, signal })`   | Return `{ lease }`. Required if reservations include a lease.                    |
+| `getTranscripts({ sessionId, signal })` | Return conversation messages. Optional; enables ASR and assistant text.          |
+
+The optional transcript method returns normalized ASR/assistant messages. The
+reference factory reads Agora history with fresh server-side authorization. No
+provider metadata or signing credentials are returned to the client.
 
 ## HTTP contract
 
@@ -150,6 +155,29 @@ The following successful operations return HTTP 200:
 The reference backend returns errors as `{ "error": "CODE" }` with a non-2xx
 status. The client exposes a safe `BACKEND` error; inspect server-side logs when
 you need the underlying reason.
+
+### Read conversation text
+
+`POST /voice/sessions/:id/transcripts` returns HTTP 200:
+
+```json
+{
+  "transcripts": [
+    { "id": "user:1", "role": "user", "text": "Hello.", "interrupted": false },
+    { "id": "assistant:1", "role": "assistant", "text": "Hi!", "interrupted": false }
+  ]
+}
+```
+
+This optional endpoint reads the running AI's conversation history. It checks
+ownership and expiry before reading and checks again before returning. Concurrent
+reads for one reservation share one cloud request. Ended sessions cannot be read.
+A custom `VoiceBackend.getTranscripts({ sessionId, signal })` returns the message
+array directly, without the HTTP `transcripts` wrapper.
+
+The AIUI Agent example polls every two seconds. This is conversation text, not an RTM
+stream or a word-synchronized TTS transcript. For large deployments or live captions,
+use a provider event/messaging feed and account for your API rate limits.
 
 ## Before deploying
 
