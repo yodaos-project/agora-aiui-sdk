@@ -72,13 +72,13 @@ const manifest = JSON.parse(files['app.json']);
 manifest.pages.push('pages/probe/index');
 files['app.json'] = JSON.stringify(manifest);
 const html = `<!doctype html><html><meta charset="utf-8"><style>body{margin:16px;background:#111;color:white;font:14px sans-serif}canvas{display:block;margin:16px 0}pre{max-width:900px;white-space:pre-wrap}</style>
-<canvas id="color" width="480" height="352"></canvas><canvas id="green" width="448" height="170"></canvas><canvas id="probe" width="200" height="100"></canvas><pre id="result">Running…</pre>
+<canvas id="color" width="448" height="170"></canvas><canvas id="green" width="448" height="170"></canvas><canvas id="large" width="480" height="352"></canvas><canvas id="probe" width="200" height="100"></canvas><pre id="result">Running…</pre>
 <script type="module">
 import { createInkView } from '/ink/index.js';
 try {
 const files = await (await fetch('/bundle')).json();
 const views = [];
-for (const [id,width,height,themeName] of [['color',480,352,'yodaos-sprite-color'],['green',448,170,'yodaos-sprite-greenonly']]) {
+for (const [id,width,height,themeName] of [['color',448,170,'yodaos-sprite-color'],['green',448,170,'yodaos-sprite-greenonly'],['large',480,352,'yodaos-sprite-color']]) {
   const view = await createInkView({ canvas: document.getElementById(id), width, height, themeName });
   view.startRendering(); view.openBundle({appId:'sdk-example-'+id,files}); views.push(view);
 }
@@ -184,7 +184,7 @@ try {
   await call('Page.enable');
   await call('Emulation.setDeviceMetricsOverride', {
     width: 1000,
-    height: 850,
+    height: 1100,
     deviceScaleFactor: 1,
     mobile: false,
   });

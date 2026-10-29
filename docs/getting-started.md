@@ -114,14 +114,14 @@ If your executable is elsewhere, use its full path in place of `ink-open`.
 The example already declares `RECORD_AUDIO`. Allow microphone access when your
 host or operating system asks.
 
-1. Tap **连接** (Connect).
-2. Wait for **已连接 Agora · 可以说话了**.
+1. Tap **开始聊天** (Start chat).
+2. Wait for **我在，慢慢说。** and **Agora · 已连接**.
 3. Say a short question in the language configured for your agent.
 4. Listen for the reply. A greeting is optional and depends on your pipeline.
-5. Tap **结束** (End) when finished.
+5. Tap **结束通话** (End call) when finished.
 
 Keep Ink in the foreground. If you return from another window and see paused
-audio, tap **播放已暂停 · 点击恢复** to resume playback.
+audio, tap the **继续聊天** resume prompt to resume playback.
 
 Success means you hear an answer to what you said. Connection indicators and
 moving meters are useful checks, but do not replace listening.

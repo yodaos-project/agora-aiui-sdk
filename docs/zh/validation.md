@@ -35,7 +35,7 @@ npm pack --dry-run
 INK_WEB_DIST=/absolute/path/to/ink/packages/ink-web/dist npm run test:ink
 ```
 
-测试使用虚拟麦克风，以 480 × 352 彩色主题和 448 × 170 单绿主题渲染示例，
+测试使用虚拟麦克风，以 448 × 170 彩色和单绿主题渲染示例，并检查 480 × 352 的彩色布局，
 并在 Ink JavaScript 运行环境中检查 SDK 启动与清理。
 认证会在请求外部 WHIP 之前主动失败。
 需要保存示例截图时，将 `INK_TEST_SCREENSHOT` 设为 PNG 文件的绝对路径。

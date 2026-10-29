@@ -66,8 +66,8 @@ Then follow the **[getting started guide](docs/getting-started.md)** to configur
 Agora, start the reference backend, and open the example in Ink. It walks through
 where to find each value, including `pipelineId`.
 
-Your first milestone: tap **连接** (Connect), speak, hear the AI answer, then tap
-**结束** (End). Keep the AIUI Agent in the foreground during the call.
+Your first milestone: tap **开始聊天** (Start chat), speak, hear the AI answer, then tap
+**结束通话** (End call). Keep the AIUI Agent in the foreground during the call.
 
 ## A call in JavaScript
 

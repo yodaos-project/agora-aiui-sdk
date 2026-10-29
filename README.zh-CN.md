@@ -61,7 +61,7 @@ npm run example:prepare
 接下来按照 **[入门指南](docs/zh/getting-started.md)** 配置 Agora、启动参考后端，
 再用 Ink 打开示例。指南会逐步说明每个参数从哪里获取，包括 `pipelineId`。
 
-第一次测试的目标：点击「连接」，说一句话，听到 AI 回答，再点击「结束」。
+第一次测试的目标：点击「开始聊天」，说一句话，听到 AI 回答，再点击「结束通话」。
 通话期间请保持 AIUI Agent 在前台。
 
 ## 用 JavaScript 发起通话

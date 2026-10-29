@@ -38,8 +38,8 @@ With Chrome/Chromium and a built Ink Web SDK containing WHIP support:
 INK_WEB_DIST=/absolute/path/to/ink/packages/ink-web/dist npm run test:ink
 ```
 
-This uses a virtual microphone, renders the sample at 480 × 352 with the color
-theme and 448 × 170 with the green-only theme, and checks SDK startup/cleanup
+This uses a virtual microphone, renders the sample at 448 × 170 in both color
+and green-only themes, also checks a 480 × 352 color layout, and checks SDK startup/cleanup
 inside Ink's JavaScript runtime. Authorization intentionally fails before an
 external WHIP request. Set `INK_TEST_SCREENSHOT` to an absolute PNG path to save
 an image of the sample.
