@@ -1,85 +1,117 @@
-# Session backend
+# Set up your session backend
 
-The business backend keeps Agora's signing certificate private and controls cloud
-Voice Agent lifetime. It never handles the audio stream. If you already allocate
-temporary credentials and start the cloud agent elsewhere, use client direct mode instead.
+[简体中文](zh/backend.md) · [All docs](README.md)
 
-## Run the reference backend
+The session backend prepares a call: it issues temporary credentials, starts the
+cloud AI after Ink connects, and stops it when the call ends. It does not relay
+audio. For the fastest setup, follow the [getting started guide](getting-started.md).
 
-Requirements: Node 22+, an Agora project with duplex WHIP access, and an AI Studio
-pipeline configured for voice input and output. The pipeline and App ID must be
-usable together. Consult [Agora's server SDK](https://github.com/AgoraIO/agora-agents-ts)
-for region, pipeline and model configuration.
+If your system already provides credentials and manages the AI, use
+[direct mode](integration.md#use-existing-temporary-credentials) instead.
 
-From the repository root:
+## Configure the reference server
 
-```sh
-npm ci
-cp examples/server/.env.example examples/server/.env
-# Edit examples/server/.env with your own values.
-npm run example:server
-```
+The example requires Node.js 22+. Copy `examples/server/.env.example` to
+`examples/server/.env`, fill in your values, then run `npm run example:server`
+from the repository root after `npm ci`.
 
-| Variable                | Where it comes from                                                                                                          |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `AGORA_APP_ID`          | Your Agora project.                                                                                                          |
-| `AGORA_APP_CERTIFICATE` | That project's signing certificate; keep it server-side.                                                                     |
-| `AGORA_PIPELINE_ID`     | Your saved voice pipeline in Agora AI Studio.                                                                                |
-| `AGORA_AREA`            | Server API region: `AP`, `CN`, `US` or `EU`. Default `AP`.                                                                   |
-| `AGORA_WHIP_BASE_URL`   | Your enabled duplex gateway. Default `https://ap-webrtc-whip.ap.sd-rtn.com`. This is separate from the cloud Agent REST API. |
-| `BACKEND_API_TOKEN`     | Generate a random value of at least 24 characters for **private demo authentication**.                                       |
-| `ALLOWED_ORIGINS`       | Comma-separated browser application origins allowed by CORS.                                                                 |
-| `HOST`, `PORT`          | Bind address; default `127.0.0.1:8787`.                                                                                      |
+| Variable                | What to enter                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| `AGORA_APP_ID`          | Your Agora project's App ID.                                                      |
+| `AGORA_APP_CERTIFICATE` | The same project's signing certificate. Keep it on the server.                    |
+| `AGORA_PIPELINE_ID`     | Your published Agent Studio configuration's `pipeline_id`.                        |
+| `AGORA_AREA`            | Cloud API area: `AP`, `CN`, `US`, or `EU`. Default: `AP`.                         |
+| `AGORA_WHIP_BASE_URL`   | Your enabled duplex WHIP origin. Default: `https://ap-webrtc-whip.ap.sd-rtn.com`. |
+| `BACKEND_API_TOKEN`     | A random private-demo token of at least 24 characters, without whitespace.        |
+| `ALLOWED_ORIGINS`       | Comma-separated Web host origins, such as `https://app.example.com`.              |
+| `HOST` / `PORT`         | Listen address. Defaults: `127.0.0.1` / `8787`.                                   |
 
-To obtain `AGORA_PIPELINE_ID`, publish your voice agent in Agent Studio, then
-open **Agents → Action → Embed Agent** and copy `pipeline_id` from the generated
-code. See [Agora's embed instructions](https://docs.agora.io/en/ai/studio/deploy/connect-agent).
-The runtime allocates its own channel, UIDs and fresh tokens; you only need the
-published configuration ID from the embed snippet.
+To find `pipeline_id`, publish your agent, then open **Agents → Action → Embed Agent**.
+Copy the ID from the generated code; do not reuse the snippet's temporary tokens
+for ongoing calls. See [Agora's embed guide](https://docs.agora.io/en/ai/studio/deploy/connect-agent).
 
-The reference server uses the official `agora-agents@2.12.0` REST client and
-`agora-token@2.0.7` account-token builder. Client and bot share a channel and use
-**different string accounts**. It sets `enable_string_uid: true`, puts the bot's
-account in `agent_rtc_uid`, and subscribes to the exact client account through
-`remote_rtc_uids`. The bot starts only after the client's media connection is established.
+The pipeline supplies the speech recognition, language model, and voice settings.
+The reference server uses the official [Agora server SDK](https://github.com/AgoraIO/agora-agents-ts)
+to start and stop it. That server SDK belongs on the backend; this project's client
+SDK belongs in your Ink app.
 
-The reference uses the SDK's REST client with an explicit string-account token:
-version 2.12.0's `AgentSession` automatic token path requires numeric UIDs.
-Tokens are refreshed for stop and reconciliation requests, so expired startup
-credentials do not prevent cleanup.
+## Choose the right addresses
 
-Update the client SDK alongside this backend: older numeric-only clients reject
-the string `uid` returned in new reservations.
+There are three separate destinations:
 
-The demo token is shared across demo clients. Do not ship that shared privileged
-token in an application. Replace `bearerAuthorizer()` with your application's user
-authentication, returning a stable user ID. Each session operation checks ownership.
-For deployment, use HTTPS and authorize the actual browser origin; CORS is not authentication.
+| Address               | Used for                                                             |
+| --------------------- | -------------------------------------------------------------------- |
+| Your backend URL      | App requests for session setup, start, stop, and renewal.            |
+| `AGORA_WHIP_BASE_URL` | The app's real-time audio connection to Agora.                       |
+| Agora cloud Agent API | Backend requests to start and stop the AI, selected by `AGORA_AREA`. |
 
-## Two different kinds of Agora tokens
+For deployment, use HTTPS for your backend. The client permits HTTP only on
+localhost/loopback for development. A phone cannot reach your computer through
+`127.0.0.1`; use a reachable HTTPS service.
 
-1. **WHIP JWT**: HS256 signed with the certificate text. Claims include `appID`,
-   `streamID`, `action: pub`, `enableSubAuth: true` and an expiry in seconds. In
-   string mode it omits `uid`; the client identity is sent as `stringuid` in the
-   WHIP URL. The client sends `Authorization: Bearer ...` to WHIP.
-2. **RTC/ConvoAI tokens**: the official `RtcTokenBuilder.buildTokenWithRtm` creates
-   a token for the bot's exact string account, including RTC and RTM privileges.
-   It is used to join the cloud agent and authenticate its REST requests.
-   These tokens are not replacements for the WHIP JWT.
+For Ink Web, put the host page's exact origin in `ALLOWED_ORIGINS`, including the
+scheme and port when present. For example, `http://localhost:5173` and
+`http://127.0.0.1:5173` are different origins. CORS controls browser access;
+Authorization still authenticates each session request.
 
-`examples/server/token.js` signs only on the backend. Never copy the certificate or
-that signer into your AIUI app. All committed configurations contain placeholders.
+## Identity and tokens
 
-## Protocol
+For cloud AI voice, use **two different string accounts in the same channel**:
 
-All operations are authenticated, **bodyless POST** requests. Responses are JSON.
-Clients may put this protocol under a prefix by including it in `baseURL` and routing
-that prefix at their reverse proxy. The standalone example mounts routes at `/voice/sessions`.
+- Client: for example, `aiui-client-10001`.
+- Cloud AI: for example, `agent-10001`.
 
-### `POST /voice/sessions`
+The reference backend sets this up for each call. If you start the AI yourself,
+set `enable_string_uid: true`, set `agent_rtc_uid` to the AI's account, and put the
+exact client account in `remote_rtc_uids`.
 
-Reserve a new channel, distinct client and bot string accounts, and a temporary WHIP JWT.
-Do not start the cloud agent yet.
+Three credentials serve different purposes:
+
+| Credential              | Sent by            | Purpose                                                                                 |
+| ----------------------- | ------------------ | --------------------------------------------------------------------------------------- |
+| Application login token | App → your backend | Authorize your user's session operations. The private demo uses `BACKEND_API_TOKEN`.    |
+| WHIP JWT                | App → Agora WHIP   | Authorize the audio connection. The server signs it and gives the app a temporary copy. |
+| RTC/ConvoAI token       | Backend → Agora    | Authenticate cloud operations and the AI participant's channel identity.                |
+
+For a custom signer, follow `examples/server/token.js`: the string-mode WHIP JWT
+has `version`, `appID`, `streamID`, `exp`, `action: 'pub'`, and `enableSubAuth: true`.
+It omits `uid`; the app's account travels in the URL's `stringuid` parameter.
+Sign HS256 with the certificate's text value, not hex-decoded bytes.
+The SDK constructs the duplex URL without a numeric `Uid` parameter.
+
+The reference server uses `RtcTokenBuilder.buildTokenWithRtm` from `agora-token`
+for the AI's exact string account. It passes explicit account tokens to
+`agora-agents@2.12.0`; that version's automatic `AgentSession` token generation
+expects numeric UIDs. Stop and reconciliation requests obtain fresh tokens too.
+Update the client and backend together: older numeric-only clients cannot read
+string-account reservations.
+
+## Use your own backend
+
+Keep App Certificates and model API keys on the server. Replace the demo's shared
+token authorizer with your application's user authentication, returning a stable
+user ID. Check that user owns the session on every operation.
+
+Use `createHttpVoiceBackend` if you implement the HTTP contract below. If your
+service already has another API, implement the `VoiceBackend` methods from
+[src/index.d.ts](../src/index.d.ts):
+
+| Method                                | Responsibility                                                                   |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| `createSession({ signal })`           | Reserve credentials and return `{ id, whip, lease? }`. Do not start the AI yet.  |
+| `startAgent({ sessionId, signal })`   | Start the AI after the app's media is connected.                                 |
+| `stopSession({ sessionId, signal })`  | Stop the AI and release the reservation. Also handle a start that finishes late. |
+| `renewSession({ sessionId, signal })` | Return `{ lease }`. Required if reservations include a lease.                    |
+
+## HTTP contract
+
+All operations use authenticated **POST requests without a body** and return JSON.
+The standalone example serves `/voice/sessions`. A proxy prefix can be included
+in the client's `baseURL` if your proxy routes that prefix.
+
+### Reserve a session
+
+`POST /voice/sessions` returns HTTP 201:
 
 ```json
 {
@@ -98,58 +130,42 @@ Do not start the cloud agent yet.
 }
 ```
 
-Timestamps in this HTTP protocol are Unix **milliseconds**, unlike the JWT `exp`.
-If using the HTTP adapter, `tokenExpiresAt` is required. `lease` is optional for
-custom adapters; if returned, the adapter must implement renewal.
+Generate channels and participant identities on the server. `tokenExpiresAt` is
+required by the HTTP adapter. HTTP timestamps are Unix **milliseconds**; JWT `exp`
+uses **seconds**. A lease is a reservation expiry that the client extends while
+active, so the backend can reclaim abandoned calls.
 
-### `POST /voice/sessions/:id/start`
+### Manage the reserved session
 
-Start the bot after media connects; respond `{ "agent": "running" }`.
-Concurrent/repeated starts must create at most one bot. A stopped or expired
-reservation cannot be restarted. This is startup acknowledgement, not a live status feed.
+The following successful operations return HTTP 200:
 
-### `POST /voice/sessions/:id/stop`
+| Endpoint                    | Response                                                             | Behavior                                                                      |
+| --------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `/voice/sessions/:id/start` | `{ "agent": "running" }`                                             | Start at most one AI for repeated/concurrent requests. Reject ended sessions. |
+| `/voice/sessions/:id/stop`  | `{ "stopped": true }`                                                | Confirm cloud cleanup, including any pending start. Repeated stops are safe.  |
+| `/voice/sessions/:id/renew` | `{ "lease": { "expiresAt": 1800000000000, "renewAfterMs": 30000 } }` | Extend an active lease; reject ended sessions.                                |
+| `/voice/sessions/:id/token` | `{ "token": "fresh-whip-jwt", "tokenExpiresAt": 1800000000000 }`     | Issue fresh WHIP authorization for the reserved channel.                      |
 
-Respond `{ "stopped": true }` only after cloud cleanup is confirmed. Idempotent.
-If start is still pending, mark the record closing immediately, then stop its
-eventual cloud resource before acknowledging cleanup. Do not forget failed stops.
+`agent: running` acknowledges startup; it is not a live status feed.
+The reference backend returns errors as `{ "error": "CODE" }` with a non-2xx
+status. The client exposes a safe `BACKEND` error; inspect server-side logs when
+you need the underlying reason.
 
-### `POST /voice/sessions/:id/renew`
+## Before deploying
 
-Extend an active reservation's lease and return `{ "lease": { "expiresAt": ..., "renewAfterMs": ... } }`.
-Reject closed/expired reservations. The example uses a 90-second lease, a
-30-minute maximum session duration and a 10-second cleanup sweep.
+The included server uses **single-process, in-memory storage**. Its defaults are
+20 active sessions, a 90-second renewable lease, a 30-minute call limit, and a
+cleanup sweep every 10 seconds. These are example policies you can change in
+`createSessionService`, not SDK-wide or Agora guarantees.
 
-### `POST /voice/sessions/:id/token`
+For production, store session ownership, channel/UIDs, cloud `agent_id`, pending
+starts, and cleanup state durably. Coordinate repeated operations across server
+instances and run cleanup independently of client requests. Reconcile uncertain
+starts by the reserved channel and allow for delayed cloud visibility.
 
-Return `{ "token": "fresh-whip-jwt", "tokenExpiresAt": ... }` for an active
-reservation. Allocate channels and participant accounts on the server rather than
-accepting them from the caller. String-mode WHIP JWTs authorize the reserved channel.
+Retain failed stops for retry. A process restart loses this example's in-memory
+records. Client unload or a lost response can also prevent final cleanup from
+being confirmed. Token expiry and the AI's 60-second idle timeout are not
+substitutes for backend cleanup or a guaranteed maximum call duration.
 
-## Cleanup and deployment limits
-
-The example store is **single-process, in-memory**. It handles delayed starts,
-lost clients, expiry and retryable failed stops while the process remains alive.
-It limits active sessions and retains closed tombstones briefly. An uncertain
-start is queried by its unique channel for a reconciliation grace period.
-
-Before production or serverless/multiple-instance deployment:
-
-- Store reservations, channel/UID, cloud agent ID and closing state durably.
-- Use atomic/idempotent operations across workers.
-- Run a scheduled reconciler independently of HTTP requests and client availability.
-- Persist an intention before calling the cloud, so a crash or lost start response
-  can be reconciled by the reserved channel. Account for the provider's visibility delay.
-- Add per-user quotas, admission limits and monitoring for unconfirmed cleanup.
-
-`expiresIn` in the official SDK controls token lifetime, **not a guaranteed cloud
-agent maximum lifetime**. The reference's duration/lease limits depend on its
-process and sweeper. `idleTimeout: 60` is an extra provider-side fallback, not a
-substitute for durable cleanup. Process restarts can lose in-memory records.
-
-Native app unload may prevent the final HTTP request from completing. The backend
-must expire reservations independently; a client `stop()` promise alone cannot
-guarantee that every server resource was deleted.
-
-The Node example is intentionally a reference you can adapt to your existing
-business backend. It is not a distributed production session service.
+Next: [client API](api.md) · [troubleshooting](troubleshooting.md)

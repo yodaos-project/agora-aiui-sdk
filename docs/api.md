@@ -1,130 +1,178 @@
-# Client API
+# Client API reference
 
-Import from the package, or from the copied `index.js` in your AIUI app.
-All SDK-created tracks and audio nodes belong to the session. Version 0.1.0
-does not accept caller-owned streams or audio contexts.
+[简体中文](zh/api.md) · [All docs](README.md)
 
-## `createAgoraVoiceSession(options)`
+Use the [integration guide](integration.md) for a complete page example.
+This page describes the public client API; TypeScript users can also read
+[src/index.d.ts](../src/index.d.ts).
 
-Choose one connection mode:
-
-| Option           | Meaning                                                                                             |
-| ---------------- | --------------------------------------------------------------------------------------------------- |
-| `backend`        | An object implementing `createSession`, `startAgent`, `stopSession`, and optionally `renewSession`. |
-| `connection`     | An `AgoraConnection`, or an async function `({ signal }) => connection`.                            |
-| `timeout`        | Total startup deadline in milliseconds; default 15000.                                              |
-| `cleanupTimeout` | Deadline for each independent cleanup operation; default 5000 ms.                                   |
-
-You can also use `new AgoraVoiceSession(options)`. It extends `EventTarget`.
-Listen for `statechange` and read `getState()`. Snapshots contain no endpoint,
-JWT, SDP or backend response body. The SDK does not write diagnostic logs.
-
-## `AgoraConnection`
+## Create a session
 
 ```js
-{
-  baseURL: 'https://ap-webrtc-whip.ap.sd-rtn.com',
-  channel: 'your-channel',
-  uid: 'aiui-client-10001',
-  token: async () => 'fresh-raw-whip-jwt',
-  rtcConfiguration: { bundlePolicy: 'max-bundle' },
-}
+const voice = createAgoraVoiceSession({ backend, timeout: 30000 });
 ```
 
-- `baseURL`: HTTPS origin only. Do not include `/pub`, credentials, query or fragment.
-- `channel`: nonempty, at most 64 characters; use a channel name accepted by your Agora deployment.
-- `uid`: a string account of 1–255 UTF-8 bytes. Use the same account in the cloud
-  agent's `remote_rtc_uids`, with `enable_string_uid: true`. Each participant needs
-  a different account. Numeric UIDs from 1 through 4294967294 remain available for
-  existing direct-mode integrations; the managed cloud AI example uses strings.
-- `stringUid`: optional legacy alias for numeric mode, default `aiui-${uid}`.
-  If provided in string mode it must equal `uid`; it cannot override the identity.
-- `token`: raw JWT string or a function returning one. Do not include `Bearer `.
-- `rtcConfiguration`: optional standard peer connection configuration.
+`createAgoraVoiceSession(options)` returns an `AgoraVoiceSession`, an `EventTarget`.
+`new AgoraVoiceSession(options)` is equivalent. Choose exactly one of `backend`
+or `connection`.
 
-`agoraEndpoint(connection)` returns the encoded duplex URL. A string `uid` produces
-`?stringuid=...&duplex=true`, without a numeric `Uid` parameter. The reference signer
-omits `uid` from the WHIP JWT in string mode. Legacy numeric mode sends both
-`stringuid` and case-sensitive `Uid`, with the numeric JWT identity matching `Uid`.
+| Option           | Meaning                                                                           | Default |
+| ---------------- | --------------------------------------------------------------------------------- | ------- |
+| `backend`        | A `VoiceBackend` that reserves credentials and starts/stops the AI.               | —       |
+| `connection`     | An `AgoraConnection`, or `async ({ signal }) => connection`. Connects audio only. | —       |
+| `timeout`        | Total startup deadline in milliseconds.                                           | `15000` |
+| `cleanupTimeout` | Deadline for each independent cleanup operation, in milliseconds.                 | `5000`  |
+
+Both deadlines must be positive finite numbers. The session owns the microphone
+tracks and audio context it creates; this version does not accept caller-provided
+streams or audio contexts.
 
 ## Start and stop
 
-`start({ signal? })` returns a promise. It resumes audio, reserves credentials,
-opens the microphone, connects RTC, and then starts the managed cloud agent.
-Use a user action to call `start()`, so the host can authorize audio playback.
-Permission denial or startup failure ends the session and attempts cleanup.
+### `start({ signal? })`
 
-The optional `signal` cancels **startup only**. After startup, use `stop()`.
-Repeated starts return the original startup promise; a session instance is single-use.
-Construct a new instance to retry after stop/failure.
+Returns `Promise<Readonly<VoiceState>>`. Call from a user's tap/click.
+It prepares audio, obtains credentials, opens the microphone, connects media,
+and then starts the AI when using a backend. Failure rejects with an
+`AgoraVoiceError` and attempts cleanup.
 
-`stop()` immediately stops capture, removes internal listeners and disconnects
-audio nodes. It concurrently attempts WHIP close, audio context close and backend
-stop. Repeated calls return the same cleanup promise. For example:
+`signal` cancels startup only. To end an established call, use `stop()`.
+Repeated starts return the same startup promise. Each instance is single-use;
+create a new instance after stop or failure.
+
+The resolved value is a state snapshot, not Agora's cloud `agent_id`. The backend
+receives that ID from Agora's start response and should retain it for cleanup and
+support requests.
+
+### `stop()`
+
+Stops microphone capture immediately, then returns a
+`Promise<Readonly<VoiceCleanupReport>>` for media, audio, and backend cleanup.
+Safe to call repeatedly; repeated calls return the same cleanup promise.
+Call from your End button and page unload handler.
 
 ```js
 const cleanup = await voice.stop();
-if (cleanup.backend === 'failed' || cleanup.backend === 'timeout') {
-  // Backend cleanup is unconfirmed; its lease/reconciler must finish the job.
-}
+console.log(cleanup); // { media, audio, backend }
 ```
 
-Each result is `complete`, `failed`, `timeout` or `not-needed`. WHIP `complete`
-means its close promise completed; it is not proof that the server processed DELETE.
-A reservation that arrives after startup cancellation is released separately;
-the backend must also expire abandoned reservations whose responses were lost.
+Each result is `complete`, `failed`, `timeout`, or `not-needed`. If backend cleanup
+fails or times out, the backend must still reclaim the cloud AI. `media: complete`
+means the local WHIP close finished; it does not confirm remote resource deletion.
 
-## State
+## Observe state
 
 ```js
-const state = voice.getState();
+voice.addEventListener('statechange', () => {
+  const state = voice.getState();
+  console.log(state.media, state.audio, state.error?.message);
+});
 ```
 
-| Field                             | Values                                                               |
-| --------------------------------- | -------------------------------------------------------------------- |
-| `lifecycle`                       | `idle`, `starting`, `running`, `stopping`, `stopped`, `failed`       |
-| `media`                           | `new`, `connecting`, `connected`, `disconnected`, `failed`, `closed` |
-| `agent`                           | `not-managed`, `idle`, `starting`, `running`, `stopped`, `unknown`   |
-| `audio`                           | Audio context state; `closed` before creation and after close        |
-| `microphoneMuted`, `speakerMuted` | Boolean control states                                               |
-| `volume`                          | Number from 0 to 1                                                   |
-| `error`                           | `null` or `{ code, message }` with a safe UI message                 |
-| `cleanup`                         | `null` until cleanup completes, then the cleanup report              |
+`getState()` returns a read-only snapshot. Read it inside the event handler;
+`statechange` does not carry a custom state payload. Snapshots exclude tokens,
+endpoints, and raw backend responses. The SDK does not log automatically.
 
-`running` describes local lifecycle or an acknowledged bot startup. It does not
-confirm remote audibility. Render `media` and `audio` too. Transient disconnects
-can recover; terminal RTC failure triggers cleanup.
+| Field                              | Values / meaning                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `lifecycle`                        | `idle`, `starting`, `running`, `stopping`, `stopped`, `failed`. Overall call progress.                              |
+| `media`                            | `new`, `connecting`, `connected`, `disconnected`, `failed`, `closed`. Actual media transport.                       |
+| `agent`                            | `not-managed`, `idle`, `starting`, `running`, `stopped`, `unknown`. Backend acknowledgement of cloud AI operations. |
+| `audio`                            | `running`, `suspended`, `closed`. Local audio context; `closed` before creation too.                                |
+| `microphoneMuted` / `speakerMuted` | Boolean mute states, initially `false`.                                                                             |
+| `volume`                           | Speaker volume from `0` to `1`, initially `1`.                                                                      |
+| `error`                            | `null` or `{ code, message }`. The message is suitable for display.                                                 |
+| `cleanup`                          | `null` until cleanup completes, then the cleanup report.                                                            |
 
-Startup rejections use `AgoraVoiceError` with codes including `ABORTED`, `TIMEOUT`,
-`UNSUPPORTED`, `AUDIO`, `BACKEND`, `CONFIGURATION`, `MICROPHONE`, `MEDIA`, `AGENT`.
-Lease renewal failures use `LEASE`. Runtime failures are delivered through state changes.
+Do not use `lifecycle: running` or `agent: running` alone to display “audio connected.”
+`agent` does not report whether the AI is currently alive or speaking. Temporary
+media disconnections may recover; terminal failure triggers cleanup. There is no
+automatic reconnect or cloud status event subscription in this version.
 
-## Audio controls
+## Control audio
 
-- `setMicrophoneMuted(boolean)`: disables/enables local audio tracks.
-- `setSpeakerMuted(boolean)`: mutes playback without muting the incoming level meter.
-- `setVolume(number)`: sets playback volume in `[0, 1]`; unmuting restores this volume.
-- `resumeAudio()`: resume playback from a user action after an interruption.
-- `getAudioLevels()`: `{ local, remote }` dBFS, clamped to `[-60, 0]`. Reads at most
-  five times per second with reusable sample buffers. Suspended audio reads as silence.
-- `getStats()`: returns the standard `RTCStatsReport` on demand. Avoid frequent
-  polling; 2–3 seconds is sufficient for a diagnostic UI.
+| Method                        | Effect                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| `setMicrophoneMuted(boolean)` | Enable/disable the local audio tracks without ending the call.                                  |
+| `setSpeakerMuted(boolean)`    | Mute playback; the remote meter continues measuring incoming audio.                             |
+| `setVolume(number)`           | Set volume in `[0, 1]`. Unmuting restores the chosen volume. Invalid values throw `RangeError`. |
+| `resumeAudio()`               | Return a promise for resuming playback. Call from a user action.                                |
+| `getAudioLevels()`            | Return `{ local, remote }`, each in `[-60, 0]` dBFS. `-60` represents silence.                  |
+| `getStats()`                  | Return `Promise<RTCStatsReport>` for the current peer connection.                               |
 
-## HTTP backend adapter
+Levels are measured at most five times per second. Suspended audio reads as
+silence. The remote meter measures before speaker volume/mute, so it can move
+while your speaker is muted. For diagnostics, polling stats every 2–3 seconds
+is enough; clear any UI timers on stop/unload.
+
+## Configure a direct connection
+
+An `AgoraConnection` contains:
+
+```js
+const connection = {
+  baseURL: 'https://ap-webrtc-whip.ap.sd-rtn.com',
+  channel: 'your-channel',
+  uid: 'aiui-client-10001',
+  token: 'temporary-raw-whip-jwt',
+};
+```
+
+| Field              | Requirement                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `baseURL`          | HTTPS origin only, without `/pub`, credentials, query, or fragment.                  |
+| `channel`          | A nonempty string of at most 64 characters, accepted by your deployment.             |
+| `uid`              | For cloud AI, a string account of 1–255 UTF-8 bytes, without a NUL character.        |
+| `token`            | Raw WHIP JWT, or a function returning one (sync or async). Do not include `Bearer `. |
+| `rtcConfiguration` | Optional standard `RTCConfiguration`. Defaults include `bundlePolicy: 'max-bundle'`. |
+
+Legacy numeric integrations can use `uid` from `1` through `4294967294` and an
+optional `stringUid` alias (default `aiui-${uid}`). In string mode, if `stringUid`
+is supplied it must equal `uid`. Use strings consistently for cloud AI; see
+[identity and tokens](backend.md#identity-and-tokens).
+
+`agoraEndpoint(connection)` returns the encoded duplex WHIP URL. In string mode
+it uses `?stringuid=...&duplex=true`, without numeric `Uid`. Legacy numeric mode
+also sends the case-sensitive `Uid` parameter.
+
+## Connect an HTTP backend
 
 ```js
 const backend = createHttpVoiceBackend({
-  baseURL: 'https://business.example.com',
-  authorization: async () => `Bearer ${await applicationLoginToken()}`,
+  baseURL: 'https://your-backend.example.com',
+  authorization: 'Bearer your-application-access-token',
   timeout: 15000,
 });
 ```
 
-`authorization` is the **complete business API header**. Each request can obtain a
-fresh value. The adapter uses bodyless POST requests and rejects redirects. HTTPS
-is required; HTTP is allowed on localhost/loopback for local development.
+| Option          | Meaning                                                                                                     |
+| --------------- | ----------------------------------------------------------------------------------------------------------- |
+| `baseURL`       | Your backend URL, optionally including a proxy prefix. Use HTTPS; loopback HTTP is allowed for development. |
+| `authorization` | A complete business Authorization header, or a sync/async function returning one for each request.          |
+| `timeout`       | Per-request deadline in milliseconds. Default: `15000`.                                                     |
+| `fetch`         | Optional application-provided Fetch function. Default: global `fetch`.                                      |
 
-Responses are capped at 64 KiB while streaming. An optional `fetch` function
-supports integration with an application's HTTP layer. Backend token responses
-use Unix timestamps in **milliseconds**; the adapter refreshes WHIP credentials
-on demand near expiry. See [backend protocol](backend.md).
+This returns a `VoiceBackend`. The adapter uses the [HTTP contract](backend.md#http-contract),
+rejects redirects, and limits JSON responses to 64 KiB. It refreshes WHIP tokens
+on demand near their reported expiry; it does not reconnect existing media.
+
+## Handle errors
+
+`AgoraVoiceError` extends `Error` and has a `code`. Startup failures reject
+`start()`; failures during a call appear through `statechange` and `getState().error`.
+Invalid construction/configuration arguments may also throw ordinary JavaScript errors.
+
+| Code            | What to check                                        |
+| --------------- | ---------------------------------------------------- |
+| `UNSUPPORTED`   | Ink host capabilities.                               |
+| `CONFIGURATION` | Connection fields and temporary credentials.         |
+| `BACKEND`       | Backend connectivity, authentication, and responses. |
+| `MICROPHONE`    | Permission and microphone availability.              |
+| `AUDIO`         | Playback activation and foreground state.            |
+| `MEDIA`         | WHIP/RTC connection and network access.              |
+| `AGENT`         | Cloud AI startup through your backend.               |
+| `TIMEOUT`       | Startup deadline and network/service availability.   |
+| `ABORTED`       | Startup was cancelled.                               |
+| `LEASE`         | Backend session renewal failed.                      |
+
+For a diagnosis workflow, see [troubleshooting](troubleshooting.md).

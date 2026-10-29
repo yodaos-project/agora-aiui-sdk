@@ -1,33 +1,59 @@
 # Agora AIUI SDK
 
-[中文说明](README.zh-CN.md)
+**Give your Ink app a voice. Build an AI assistant people can talk to.**
 
-Build a voice conversation in an [Ink](https://github.com/jsar-project/ink) AIUI agent.
-The SDK connects the microphone and speaker to Agora over WHIP and WebRTC. An optional
-business backend starts an Agora cloud Voice Agent in the same channel.
+[![Checks](https://github.com/yodaos-project/agora-aiui-sdk/actions/workflows/check.yml/badge.svg)](https://github.com/yodaos-project/agora-aiui-sdk/actions/workflows/check.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Version **0.1.0** provides:
+English · [简体中文](README.zh-CN.md)
 
-- Bidirectional audio, microphone/speaker mute, volume and audio levels.
-- Separate media, playback and cloud agent states.
-- Cancellation, immediate microphone shutdown and bounded cleanup.
-- Direct connection with temporary credentials, or a managed session backend.
-- JavaScript modules, TypeScript declarations, a compact AIUI example and a Node backend example.
+[Get started](docs/getting-started.md) · [Documentation](docs/README.md) · [Example app](examples/agent) · [API](docs/api.md)
 
-**Live test status:** Use string UIDs consistently for the client and cloud agent.
-The earlier numeric-UID tests did not receive AI audio. See the current
-[verification results](docs/validation.md#string-uid-correction-2026-10-29) for the
-host and conversation checks completed with string accounts.
+## What is a Voice Agent?
 
-The client has no runtime package dependencies. It uses Ink's `WHIPSession`,
-`RTCPeerConnection`, `AudioContext` and `navigator.mediaDevices` APIs. Use an Ink
-build containing [WHIP support](https://github.com/jsar-project/ink/pull/735).
-Android, desktop and Web hosts must enable WebRTC and microphone permission.
-Open the agent as a foreground app; widget/list previews do not permit voice.
-An Ink Web host should open the bundle with
-`hostOptions: { initialTarget: '_blank', initialFocus: 'focus' }` and provide microphone permission decisions.
+A Voice Agent is an AI assistant you speak to. You ask a question through a
+microphone; it understands your words, prepares a response, and speaks back.
+It brings a conversation to your app without asking people to type or read a screen.
 
-## 1. Try the AIUI example
+With this SDK, your [Ink](https://github.com/jsar-project/ink) app captures your
+voice and plays the reply. Agora's cloud Voice Agent handles speech recognition,
+the language model, and speech synthesis. You choose those services in Agora
+Agent Studio.
+
+### Why voice?
+
+- **Keep hands free.** Useful on AI glasses and while doing another task.
+- **Make interactions approachable.** Let people ask in their own words.
+- **Guide people as they go.** Deliver instructions, explanations, or practice as a conversation.
+
+### What can you build?
+
+| Use case             | Example conversation                |
+| -------------------- | ----------------------------------- |
+| AI glasses assistant | “Explain the next step.”            |
+| Language practice    | “Let's practice ordering a coffee.” |
+| Product onboarding   | “How do I use this feature?”        |
+| Interactive guide    | “Tell me more about this exhibit.”  |
+
+These are starting points. The agent's knowledge, language, and behavior come
+from the cloud configuration you provide.
+
+## What this SDK does
+
+- **Two-way voice:** send microphone audio and hear AI replies through Agora WHIP and WebRTC.
+- **Call controls:** start, end, mute the microphone or speaker, and adjust volume.
+- **Useful feedback:** read connection states and local/remote audio levels.
+- **Flexible setup:** use the included session backend, your own backend, or existing temporary credentials.
+- **Ready-to-adapt example:** a compact Ink page for glasses, with color and green-only themes.
+
+The client uses Ink's media APIs and has no additional runtime package dependencies.
+JavaScript modules and TypeScript declarations are included.
+
+## Start with the example
+
+You need Node.js 22+, an Ink host with WHIP and microphone support, an Agora
+project enabled for duplex WHIP, and a published voice agent in Agent Studio.
+Agora cloud usage may incur charges under your plan.
 
 ```sh
 git clone https://github.com/yodaos-project/agora-aiui-sdk.git
@@ -36,136 +62,87 @@ npm ci
 npm run example:prepare
 ```
 
-1. Set up a business backend using the [backend guide](docs/backend.md). You need an
-   Agora App ID, App Certificate and an AI Studio pipeline configured for voice.
-2. Edit `examples/agent/configuration.js`: set your backend URL and return your
-   application's Authorization header from `authorization()`.
-3. Open `examples/agent` in an Ink host, such as `ink-open examples/agent`.
-4. Allow microphone access and tap **连接**. Keep the page in the foreground.
+Then follow the **[getting started guide](docs/getting-started.md)** to configure
+Agora, start the reference backend, and open the example in Ink. It walks through
+where to find each value, including `pipelineId`.
 
-The example uses your backend for session management; audio goes directly between
-Ink and Agora Cloud. A production deployment does not require a server running on
-the developer's computer. The reference backend can run on your own HTTPS service.
+Your first milestone: tap **连接** (Connect), speak, hear the AI answer, then tap
+**结束** (End). Keep the app in the foreground during the call.
 
-The page uses Ink theme colors, including `yodaos-sprite-color` and
-`yodaos-sprite-greenonly`, and a compact layout for glasses.
+## A call in JavaScript
 
-## 2. Use the SDK in your agent
-
-For AIUI projects that load files directly, copy `src/*.js` into a directory such
-as `lib/agora-voice/` in your app. Preserve the filenames and relative imports.
-The example preparation command does this for `examples/agent/lib/sdk/`.
-
-For projects with an npm bundler, install from GitHub:
+For a project with an npm bundler, install from GitHub:
 
 ```sh
 npm install github:yodaos-project/agora-aiui-sdk
 ```
 
-The package name is `@yodaos-pkg/agora-aiui-sdk`. This first version is delivered
-through GitHub; the setup does not assume an npm registry release.
+Once your backend and app configuration are ready, start a call like this.
+Ink apps that load local scripts can [copy the SDK files instead](docs/integration.md#ink-app-with-local-scripts).
 
 ```js
-import { createAgoraVoiceSession, createHttpVoiceBackend } from './lib/agora-voice/index.js';
+import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/agora-aiui-sdk';
+import configuration from './configuration.js';
 
 const backend = createHttpVoiceBackend({
-  baseURL: 'https://your-backend.example.com',
-  authorization: async () => `Bearer ${await getApplicationAccessToken()}`,
+  baseURL: configuration.backendURL,
+  authorization: configuration.authorization,
 });
 
-const voice = createAgoraVoiceSession({ backend, timeout: 30000 });
+const voice = createAgoraVoiceSession({ backend });
+
 voice.addEventListener('statechange', () => {
-  const { lifecycle, media, agent, audio, error } = voice.getState();
-  // Update your page here. Show errors using error.message.
-  console.log(lifecycle, media, agent, audio, error?.code);
+  console.log(voice.getState());
 });
 
-// Run start() from a user action, such as tapping your Connect button.
+// Run from your Connect button.
 await voice.start();
-voice.setMicrophoneMuted(true);
-voice.setSpeakerMuted(false);
-voice.setVolume(0.8);
-const { local, remote } = voice.getAudioLevels(); // dBFS, -60 to 0
-
-// Call this on End and page unload. Capture stops before the promise settles.
-const cleanup = await voice.stop();
 ```
 
-`getApplicationAccessToken()` is supplied by your application. It authenticates
-your business backend, and is different from an Agora WHIP JWT.
+Call `voice.stop()` from your End button and page unload handler. Create a new
+session for the next call. See [add voice to your app](docs/integration.md) for
+installation, page lifecycle, and audio controls.
 
-## 3. Connect with existing temporary credentials
+## How the pieces fit together
 
-Use direct mode if your system already starts the cloud agent, or to call another
-RTC participant. No session backend is required at runtime in this mode.
+| Piece                   | Responsibility                                              |
+| ----------------------- | ----------------------------------------------------------- |
+| Your Ink app + this SDK | Capture speech, play replies, and show call controls.       |
+| Your session backend    | Issue temporary credentials and start/stop the cloud agent. |
+| Agora Cloud             | Carry the audio and run the configured AI conversation.     |
 
-```js
-import { createAgoraVoiceSession } from './lib/agora-voice/index.js';
+Audio travels directly between Ink and Agora Cloud. The session backend handles
+setup and cleanup. The included Node.js backend is a starting point for your own
+service; you can also [connect with existing credentials](docs/integration.md#use-existing-temporary-credentials).
 
-const voice = createAgoraVoiceSession({
-  connection: {
-    baseURL: 'https://ap-webrtc-whip.ap.sd-rtn.com',
-    channel: 'your-channel',
-    uid: 'aiui-client-10001',
-    token: 'temporary-whip-jwt-from-your-trusted-service',
-  },
-});
-await voice.start();
-// ... talk to a cloud agent or another participant in the channel ...
-await voice.stop();
-```
+Keep the **App Certificate and model API keys on the server**. The reference
+backend configures distinct **string UIDs** for the app and AI, as required by
+this cloud voice integration.
 
-The JWT must authorize the same channel. For cloud AI, use a **string UID**, send
-it as the WHIP `stringuid` query parameter, and configure the cloud agent with
-`enable_string_uid: true`. The agent's `remote_rtc_uids` must contain that exact
-client string; its own `agent_rtc_uid` must be a different string account.
-In this mode the WHIP URL has no numeric `Uid`, and the WHIP JWT omits `uid`.
-This SDK targets Agora's duplex WHIP extension; standard ingest-only
-WHIP services cannot provide the downlink required for a voice conversation.
+## Documentation
 
-For longer calls, use a token callback that obtains a fresh JWT when needed.
-The SDK can request authorization again when closing the WHIP resource. It does
-not restart an existing RTC session when a token changes.
+| I want to…                                                | Read                                               |
+| --------------------------------------------------------- | -------------------------------------------------- |
+| Have my first conversation                                | [Getting started](docs/getting-started.md)         |
+| Add voice to an existing app                              | [Integration guide](docs/integration.md)           |
+| Configure Agora or use my own backend                     | [Backend guide](docs/backend.md)                   |
+| Look up a method or option                                | [API reference](docs/api.md)                       |
+| Fix silence, a failed connection, or interrupted playback | [Troubleshooting](docs/troubleshooting.md)         |
+| Check test coverage or contribute                         | [Development and verification](docs/validation.md) |
 
-## Understand the states
+Version 0.1.0 focuses on foreground voice conversations. Captions, RTM messaging,
+local tool calls, automatic reconnection, and background calling are not included.
+Ink Web has passed repeated real-cloud voice tests; see [verification scope](docs/validation.md#real-cloud-results)
+for host-specific results and remaining checks.
 
-| Field       | What it tells your UI                                                                    |
-| ----------- | ---------------------------------------------------------------------------------------- |
-| `lifecycle` | Whether startup, a call or cleanup is in progress.                                       |
-| `media`     | Actual RTC transport, including `disconnected` and `failed`.                             |
-| `agent`     | Whether the backend acknowledged cloud agent startup/stop. Direct mode is `not-managed`. |
-| `audio`     | Whether the audio context is `running`, `suspended` or `closed`.                         |
+## Contribute
 
-Successful HTTP signaling alone does not mean audio is connected. `agent: running`
-means the start request was acknowledged; it does not prove the bot is currently
-alive, speaking or audible. This version does not subscribe to cloud agent status events.
-
-Transient `disconnected` remains visible while RTC attempts recovery. A terminal
-transport failure ends the call and releases its resources. To try again after
-stop/failure, create a **new session instance**. There is no automatic reconnect.
-Call `resumeAudio()` from a user action after playback is interrupted. Background
-capture/playback depends on the host; this SDK is intended for foreground pages.
-
-## What is outside this version?
-
-Captions, RTM messages, cloud agent semantic events, local tool execution and
-background workers are not implemented. WHIP audio does not by itself provide an
-Agora messaging channel. No ASR, LLM or TTS API keys belong in the client bundle.
-
-## Development and validation
+Found a problem or have an idea? [Open an issue](https://github.com/yodaos-project/agora-aiui-sdk/issues).
+Include your Ink host, SDK version, and a short reproduction. Please leave out credentials.
 
 ```sh
 npm ci
 npm run check
-npm run example:prepare
-npm pack --dry-run
 ```
 
-Tests cover lifecycle races, late microphone/reservation results, mute/volume,
-transport state, cleanup deadlines, HTTP response limits, backend authentication,
-leases and requests made by the actual official server SDK against a local mock.
-They do **not** establish real-cloud or device audio interoperability. Before
-shipping your app, verify audible two-way audio against your pipeline on each host.
-
-See [API](docs/api.md), [backend setup/protocol](docs/backend.md) and
-[verification notes](docs/validation.md).
+Contributions are welcome. This project is released under the [MIT License](LICENSE).
