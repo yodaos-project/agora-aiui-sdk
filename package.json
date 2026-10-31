@@ -9,10 +9,9 @@
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.d.ts",
-      "default": "./src/index.js"
-    }
+    ".": "./src/index.js",
+    "./voice": "./src/voice.js",
+    "./worker": "./src/worker.js"
   },
   "files": [
     "src",
@@ -31,7 +30,8 @@
     "format:check": "prettier --check .",
     "example:prepare": "node scripts/prepare-agent.js",
     "example:server": "node --env-file=examples/server/.env examples/server/main.js",
-    "check": "npm run test && npm run typecheck && npm run format:check"
+    "check": "npm run test && npm run typecheck && npm run format:check",
+    "prepack": "node scripts/build-rtm.js"
   },
   "devDependencies": {
     "@types/debug": "4.1.13",

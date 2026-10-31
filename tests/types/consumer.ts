@@ -7,7 +7,23 @@ import {
   type VoiceState,
   type VoiceTranscript,
 } from '../../src/index.js';
+import { createWorkerTranscripts } from '../../src/voice.js';
 import type { RTMClient } from 'agora-rtm';
+
+declare const inkWorkerPort: EventTarget & {
+  readonly id: string;
+  readonly generation: number;
+  readonly closed: boolean;
+  postMessage(value: unknown): void;
+  start(): void;
+  close(): void;
+  onmessage: ((event: Event & { readonly data: any }) => void) | null;
+  onmessageerror: ((event: Event) => void) | null;
+  onclose: ((event: Event) => void) | null;
+};
+createWorkerTranscripts(async () => inkWorkerPort, {
+  onActivity: (activity) => console.log(activity.thinking),
+});
 declare const OfficialRTM: typeof RTMClient;
 
 const backend = createHttpVoiceBackend({

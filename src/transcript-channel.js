@@ -15,7 +15,7 @@ function deferred() {
 
 export function createWorkerTranscripts(
   connectPort,
-  { timeout = 15000, cleanupTimeout = 2000 } = {},
+  { timeout = 15000, cleanupTimeout = 2000, onActivity: observeActivity } = {},
 ) {
   return {
     connect({ connection, signal, onUpdate, onState, onActivity }) {
@@ -134,8 +134,10 @@ export function createWorkerTranscripts(
             } else if (data?.type === 'tokenRequest') void provideToken(data.requestId);
             else if (data?.type === 'snapshot' && Array.isArray(data.messages))
               onUpdate(data.messages);
-            else if (data?.type === 'activity') onActivity?.(data.activity);
-            else if (data?.type === 'state' && statuses.has(data.status))
+            else if (data?.type === 'activity') {
+              onActivity?.(data.activity);
+              observeActivity?.(data.activity);
+            } else if (data?.type === 'state' && statuses.has(data.status))
               onState({
                 status: data.status,
                 error: data.status === 'failed' ? unavailable() : null,

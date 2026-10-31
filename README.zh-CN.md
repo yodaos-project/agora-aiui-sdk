@@ -89,7 +89,7 @@ ink-open examples/agent --networking-transport native --permission-checks --them
 npm install github:yodaos-project/agora-aiui-sdk
 ```
 
-直接加载本地脚本的 AIUI Agent，可以选择[复制 SDK 模块](docs/zh/integration.md#使用本地脚本的-aiui-agent)。
+Ink 会从 AIUI Agent 自己的 `node_modules` 加载 SDK。
 准备好后端和应用登录配置后：
 
 ```js

@@ -112,20 +112,23 @@ AI 思考、说话和本地播放期间，暂不发送麦克风音频。
 
 ## 显示实时对话文字
 
-`npm run example:prepare` 会为示例准备官方 RTM 构造器：
+参考[示例](../../examples/agent/app.json)在 `app.json` 中声明 `transcripts` Agent Worker，Worker 入口只需：
 
 ```js
-import { createAgoraVoiceSession, createAgoraRtmTranscripts } from './lib/sdk/index.js';
-import AgoraRTM from './lib/sdk/rtm-vendor.js';
+export { default } from '@yodaos-pkg/agora-aiui-sdk/worker';
+```
 
-const transcriptSource = createAgoraRtmTranscripts({ RTM: AgoraRTM.RTM });
-const voice = createAgoraVoiceSession({ backend, transcripts: transcriptSource, timeout: 45000 });
+在 Page 的 `onLoad` 中连接 Worker 并创建会话：
+
+```js
+import { createAgoraVoiceSession, createWorkerTranscripts } from '@yodaos-pkg/agora-aiui-sdk/voice';
+
+const transcripts = createWorkerTranscripts((options) =>
+  this.connectWorker('transcripts', options),
+);
+const voice = createAgoraVoiceSession({ backend, transcripts, timeout: 45000 });
 voice.addEventListener('transcriptchange', () => {
-  const messages = voice.getTranscriptSnapshot();
-  for (const message of messages) console.log(message.role, message.text, message.status);
-});
-voice.addEventListener('transcriptstatechange', () => {
-  console.log(voice.getTranscriptState().status);
+  for (const message of voice.getTranscriptSnapshot()) console.log(message.role, message.text);
 });
 ```
 
@@ -133,9 +136,7 @@ voice.addEventListener('transcriptstatechange', () => {
 文字通过 RTM 事件推送；同步读取 `getTranscriptSnapshot()` 不会发起 HTTP 请求。
 每次事件都用新的消息列表替换页面内容。同一轮的中间结果会被后续结果更新，
 不要把每次更新都当成一条新消息追加。
-连续通话时保留同一个 `transcriptSource`，等待 `voice.stop()` 完成后再复用。
-固定账号会复用已经注销的 RTM 客户端，因为官方 SDK 不允许为相同账号再次调用构造器。
-不同固定账号分别使用适配器；每次分配新账号的会话只保留最近的一个客户端，不积累实例池。
+连续通话时保持 Worker 可用，并等待 `voice.stop()` 完成后再复用账号；SDK 会管理 RTM 客户端。
 
 每条 `VoiceTranscript` 包含 `id`、`role`（`user` 或 `assistant`）、`text` 和 `interrupted`。
 RTM 消息还包含 `status`：`in-progress`（进行中）、`final`（完成）或 `interrupted`（已打断）。
@@ -144,7 +145,7 @@ ASR 可以在整句识别结束前显示中间结果，AI 文字随服务端生�
 
 `getTranscriptState()` 返回 `{ status, error }`。状态为 `disabled`、`connecting`、`connected`、
 `disconnected`、`failed` 或 `closed`。文字错误与 `getState().error` 分开，不会结束已经建立的语音通话。
-RTM 建连默认最多等待 15 秒，可用 `createAgoraRtmTranscripts({ RTM, timeout })` 调整；
+RTM 建连默认最多等待 15 秒，可用 `createWorkerTranscripts(connectPort, { timeout })` 调整；
 这个过程也计入整个会话的启动时限。
 
 最多保留 20 条消息，每条最多 2,000 个字符，总计最多 12,000 个字符；过长内容会截断。
@@ -152,7 +153,7 @@ RTM 建连默认最多等待 15 秒，可用 `createAgoraRtmTranscripts({ RTM, t
 确认 AI 被打断后，会短暂显示「已打断」。AI 回复文字仍在 SDK 快照中提供，页面不展示。
 `stop()` 会移除监听并注销本次 RTM 客户端；启用实时文字时，清理结果会额外包含 `transcripts`。
 
-RTM 构造器由调用方传入，纯语音会话不需要加载它。示例通过专用加载器打包 RTM 2.3.0，
+Worker 入口通过专用加载器打包 RTM 2.3.0，纯语音会话不需要加载它；
 不会加载 Agora RTC SDK，也不会改动 Ink 的全局 API。
 在 Ink Web 中，应为较大的 SDK 留出初始化时间，例如
 `createInkView({ canvas, scriptExecution: { timeoutMs: 10000 } })`，保持有限的执行时限。

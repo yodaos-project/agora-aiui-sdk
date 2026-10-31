@@ -42,7 +42,7 @@ npm ci
 npm run example:prepare
 ```
 
-`example:prepare` 会把客户端 SDK 复制到示例 AIUI Agent 中，供 Ink 加载。
+`example:prepare` 会构建 RTM Worker 资源，并将本地 SDK 依赖安装到示例的 `node_modules`。
 修改 SDK 源码后，需要重新执行这条命令。
 
 ## 3. 配置并启动后端

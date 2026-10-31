@@ -1,7 +1,5 @@
 <script setup>
-  import { createAgoraVoiceSession } from '../../lib/sdk/session.js';
-  import { createHttpVoiceBackend } from '../../lib/sdk/http-backend.js';
-  import { createWorkerTranscripts } from '../../lib/transcript-channel.js';
+  import { createAgoraVoiceSession, createHttpVoiceBackend, createWorkerTranscripts } from '@yodaos-pkg/agora-aiui-sdk/voice';
   import configuration from '../../configuration.js';
   import { changedFields, presentCall, readConversation } from './presentation.js';
 
@@ -26,20 +24,16 @@
         baseURL: configuration.backendURL,
         authorization: configuration.authorization,
       });
-      const source = createWorkerTranscripts((options) => this.connectWorker('transcripts', options));
-      // Observe the existing source contract and preserve the SDK's activity callback.
-      this.transcriptSource = {
-        connect: (options) =>
-          source.connect({
-            ...options,
-            onActivity: (activity) => {
-              options.onActivity?.(activity);
-              if (this.unloaded || options.signal.aborted) return;
-              this.cloudActivity = { ...this.cloudActivity, ...activity };
-              if (this.voice) this.refreshAudio(this.voice);
-            },
-          }),
-      };
+      this.transcriptSource = createWorkerTranscripts(
+        (options) => this.connectWorker('transcripts', options),
+        {
+          onActivity: (activity) => {
+            if (this.unloaded) return;
+            this.cloudActivity = { ...this.cloudActivity, ...activity };
+            if (this.voice) this.refreshAudio(this.voice);
+          },
+        },
+      );
     },
     onUnload() {
       this.unloaded = true;

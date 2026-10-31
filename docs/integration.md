@@ -7,31 +7,16 @@ per call, start it from a user action, and stop it when the page closes.
 
 ## Install the client
 
-Choose the option that matches your project.
-
-### AIUI Agent with local scripts
-
-Copy all `.js` files from this repository's `src/` directory into your AIUI Agent's
-`lib/agora-voice/` directory. Keep the filenames and relative imports together.
-From a page under `pages/call/`, import:
-
-```js
-import { createAgoraVoiceSession, createHttpVoiceBackend } from '../../lib/agora-voice/index.js';
-```
-
-The included example uses the same approach, with `npm run example:prepare`
-copying files to `examples/agent/lib/sdk/`.
-
-### Project with an npm bundler
-
-Install from GitHub; this setup does not require an npm registry release:
+Install the SDK in your AIUI Agent directory. The package is not yet published to npm, so install it from GitHub:
 
 ```sh
 npm install github:yodaos-project/agora-aiui-sdk
 ```
 
+Ink loads the dependency from the agent’s `node_modules`. Import the lightweight voice entry:
+
 ```js
-import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/agora-aiui-sdk';
+import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/agora-aiui-sdk/voice';
 ```
 
 Installing the package alone does not add Ink's media APIs to a regular browser.
@@ -48,7 +33,7 @@ The following script fits a page under `pages/call/`. Bind your Connect button t
 `connect`, your End button to `stop`, and show `status` on the page.
 
 ```js
-import { createAgoraVoiceSession, createHttpVoiceBackend } from '../../lib/agora-voice/index.js';
+import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/agora-aiui-sdk/voice';
 import configuration from '../../configuration.js';
 
 export default {

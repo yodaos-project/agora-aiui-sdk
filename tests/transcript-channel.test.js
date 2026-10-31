@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import {
-  createWorkerTranscripts,
-  serveWorkerTranscripts,
-} from '../examples/agent/lib/transcript-channel.js';
+import { createWorkerTranscripts, serveWorkerTranscripts } from '../src/transcript-channel.js';
 import { createAgoraVoiceSession } from '../src/index.js';
 import { backend, deferred, fakeRuntime, tick } from './helpers.js';
 
@@ -84,7 +81,8 @@ function fixture(options = {}) {
 }
 
 test('Worker credentials are correlated without cloning callbacks; partials coalesce and finals flush', async () => {
-  const setup = fixture({ interval: 20 });
+  const observed = [];
+  const setup = fixture({ interval: 20, onActivity: (activity) => observed.push(activity) });
   await setup.handle.ready;
   assert.deepEqual(setup.states, ['connected']);
   assert.deepEqual(setup.wire.packets[0], { type: 'connect', connection: credentials });
@@ -106,6 +104,7 @@ test('Worker credentials are correlated without cloning callbacks; partials coal
   await tick();
   assert.equal(setup.updates.at(-1)[0].interrupted, true);
   assert.deepEqual(setup.activities, [{ thinking: true }]);
+  assert.deepEqual(observed, [{ thinking: true }]);
   assert.equal(await setup.callbacks.connection.token(), 'short-lived');
   await setup.handle.close();
   assert.equal(setup.stopped, 1);
@@ -276,8 +275,8 @@ test('the Page has no eager RTM vendor import and the manifest declares the Work
   const worker = await readFile(new URL('workers/transcripts.js', root), 'utf8');
   const manifest = JSON.parse(await readFile(new URL('app.json', root), 'utf8'));
   assert(!/rtm-vendor|AgoraRTM|createAgoraRtmTranscripts/.test(page));
-  assert(!page.includes('/sdk/index.js'), 'The eager SDK barrel also imports the RTM reducer.');
-  assert.match(worker, /rtm-vendor/);
+  assert.match(page, /@yodaos-pkg\/agora-aiui-sdk\/voice/);
+  assert.match(worker, /@yodaos-pkg\/agora-aiui-sdk\/worker/);
   assert.equal(manifest.agentWorkers[0].name, 'transcripts');
   assert.equal(manifest.agentWorkers[0].lifetime, 'foreground');
 });

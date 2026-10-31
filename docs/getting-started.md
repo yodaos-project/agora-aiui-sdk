@@ -44,7 +44,7 @@ npm ci
 npm run example:prepare
 ```
 
-`example:prepare` copies the client SDK into the example AIUI Agent so Ink can load it.
+`example:prepare` builds the RTM Worker bundle and installs the local SDK dependency in the example’s `node_modules`.
 Run it again after changing the SDK source.
 
 ## 3. Configure and start the backend

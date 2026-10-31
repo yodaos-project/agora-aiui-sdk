@@ -7,7 +7,6 @@ import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { rtmVendorSource } from './rtm-vendor.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const ink = process.env.INK_WEB_DIST;
@@ -22,6 +21,12 @@ const binary =
 if (!ink || !existsSync(path.join(ink, 'index.js')))
   throw new Error('Set INK_WEB_DIST to a built Ink Web SDK containing WHIP support.');
 if (!binary) throw new Error('Set CHROME_BIN to Chrome/Chromium.');
+if (
+  !existsSync(
+    path.join(root, 'examples/agent/node_modules/@yodaos-pkg/agora-aiui-sdk/src/rtm-vendor.js'),
+  )
+)
+  throw new Error('Run npm run example:prepare before the Ink runtime check.');
 const files = {};
 async function collect(directory, prefix = '') {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -32,13 +37,8 @@ async function collect(directory, prefix = '') {
   }
 }
 await collect(path.join(root, 'examples/agent'));
-for (const name of await readdir(path.join(root, 'src'))) {
-  if (name.endsWith('.js'))
-    files[`lib/sdk/${name}`] = await readFile(path.join(root, 'src', name), 'utf8');
-}
-files['lib/sdk/rtm-vendor.js'] = await rtmVendorSource();
 const probe = `
-import { createAgoraVoiceSession } from '../../lib/sdk/index.js';
+import { createAgoraVoiceSession } from '@yodaos-pkg/agora-aiui-sdk/voice';
 export default {
   onLoad() { this.postMessage({ ready: true }); },
   async run() {

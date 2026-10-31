@@ -1,0 +1,8 @@
+{
+  "name": "agora-aiui-voice-example",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@yodaos-pkg/agora-aiui-sdk": "file:../.."
+  }
+}

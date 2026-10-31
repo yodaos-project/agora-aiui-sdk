@@ -22,7 +22,7 @@ timeouts, connection states, audio controls, lease renewal, HTTP authentication,
 response limits, and backend races. Official Agora server SDK requests are checked
 against a local mock endpoint, not the live cloud.
 
-`example:prepare` copies the client into the example AIUI Agent. `npm pack --dry-run`
+`example:prepare` builds the Worker bundle and installs the local SDK dependency. `npm pack --dry-run`
 lists package contents; server code and credentials must not be included.
 
 For documentation changes, keep English and Chinese pages aligned, check relative

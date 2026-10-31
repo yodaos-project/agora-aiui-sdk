@@ -7,3 +7,5 @@ coverage/
 examples/agent/lib/sdk/
 examples/agent/configuration.local.js
 .DS_Store
+
+src/rtm-vendor.js

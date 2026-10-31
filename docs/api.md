@@ -128,20 +128,23 @@ the SDK does not remove text based on when a message arrives.
 
 ## Display live conversation text
 
-Use the official RTM constructor included by `npm run example:prepare`:
+Declare a `transcripts` Agent Worker in `app.json` as shown in the [example](../examples/agent/app.json), and use this Worker entry:
 
 ```js
-import { createAgoraVoiceSession, createAgoraRtmTranscripts } from './lib/sdk/index.js';
-import AgoraRTM from './lib/sdk/rtm-vendor.js';
+export { default } from '@yodaos-pkg/agora-aiui-sdk/worker';
+```
 
-const transcriptSource = createAgoraRtmTranscripts({ RTM: AgoraRTM.RTM });
-const voice = createAgoraVoiceSession({ backend, transcripts: transcriptSource, timeout: 45000 });
+In the Page's `onLoad`, connect the Worker and create the session:
+
+```js
+import { createAgoraVoiceSession, createWorkerTranscripts } from '@yodaos-pkg/agora-aiui-sdk/voice';
+
+const transcripts = createWorkerTranscripts((options) =>
+  this.connectWorker('transcripts', options),
+);
+const voice = createAgoraVoiceSession({ backend, transcripts, timeout: 45000 });
 voice.addEventListener('transcriptchange', () => {
-  const messages = voice.getTranscriptSnapshot();
-  for (const message of messages) console.log(message.role, message.text, message.status);
-});
-voice.addEventListener('transcriptstatechange', () => {
-  console.log(voice.getTranscriptState().status);
+  for (const message of voice.getTranscriptSnapshot()) console.log(message.role, message.text);
 });
 ```
 
@@ -150,10 +153,7 @@ and subscribes before starting the cloud AI. Text arrives through RTM events;
 reading `getTranscriptSnapshot()` is synchronous and makes no HTTP request.
 Replace the displayed list on each event. Partial text replaces the earlier
 version of the same turn; do not append every update as a new message.
-Keep `transcriptSource` across consecutive calls and await `voice.stop()` before
-reusing it. For a fixed account, it reuses the logged-out RTM client because the
-official SDK rejects a second constructor for the same account. Use a separate
-source for each fixed account; rotating session accounts retain only the latest client.
+Keep the Worker available across consecutive calls and await `voice.stop()` before reusing an account. The SDK manages its RTM clients.
 
 Each `VoiceTranscript` has `id`, `role` (`user` or `assistant`), `text`, and
 `interrupted`. RTM messages also have `status`: `in-progress`, `final`, or
@@ -166,7 +166,7 @@ audio playback or confirm which words were heard.
 `connecting`, `connected`, `disconnected`, `failed`, or `closed`. Text errors are
 separate from `getState().error` and do not end an established audio call.
 RTM setup defaults to a 15-second deadline; change it with
-`createAgoraRtmTranscripts({ RTM, timeout })`. RTM setup is also within the
+`createWorkerTranscripts(connectPort, { timeout })`. RTM setup is also within the
 session's overall startup deadline.
 
 Snapshots retain at most 20 messages, 2,000 characters per message and 12,000
@@ -177,9 +177,7 @@ to audio levels and cloud thinking; a confirmed interrupted AI turn briefly show
 `stop()` removes listeners and logs out the owned RTM client;
 its cleanup report includes `transcripts` when live text was configured.
 
-The RTM constructor is injected, so the base client SDK does not load it for
-audio-only sessions. The example packages RTM 2.3.0 with a scoped Ink loader;
-it does not load Agora's RTC SDK or change Ink's global APIs. On Ink Web, allow
+The Worker entry packages RTM 2.3.0 with a scoped Ink loader; the voice entry does not load it for audio-only sessions. It does not load Agora's RTC SDK or change Ink's global APIs. On Ink Web, allow
 time for this large SDK to initialize, for example
 `createInkView({ canvas, scriptExecution: { timeoutMs: 10000 } })`.
 Keep the execution budget bounded.

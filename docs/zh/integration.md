@@ -7,30 +7,16 @@
 
 ## 安装客户端
 
-根据项目的脚本加载方式，选择一种。
-
-### 使用本地脚本的 AIUI Agent
-
-把本仓库 `src/` 中所有 `.js` 文件复制到 AIUI Agent 的 `lib/agora-voice/` 目录，
-保留文件名和相对引用关系。在 `pages/call/` 中的页面可以这样导入：
-
-```js
-import { createAgoraVoiceSession, createHttpVoiceBackend } from '../../lib/agora-voice/index.js';
-```
-
-项目示例也是这个方式。`npm run example:prepare` 会把文件复制到
-`examples/agent/lib/sdk/`。
-
-### 使用 npm 打包的项目
-
-从 GitHub 安装即可，这个步骤不要求包已发布到 npm registry：
+在 AIUI Agent 目录下安装 SDK。该包尚未发布到 npm，可从 GitHub 安装：
 
 ```sh
 npm install github:yodaos-project/agora-aiui-sdk
 ```
 
+Ink 会从 agent 的 `node_modules` 加载依赖。页面使用轻量语音入口：
+
 ```js
-import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/agora-aiui-sdk';
+import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/agora-aiui-sdk/voice';
 ```
 
 安装包不会自动为普通浏览器补齐 Ink 的媒体 API。
@@ -46,7 +32,7 @@ import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/ago
 把「连接」按钮绑定到 `connect`，「结束」按钮绑定到 `stop`，在页面上显示 `status`。
 
 ```js
-import { createAgoraVoiceSession, createHttpVoiceBackend } from '../../lib/agora-voice/index.js';
+import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/agora-aiui-sdk/voice';
 import configuration from '../../configuration.js';
 
 export default {

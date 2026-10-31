@@ -204,3 +204,27 @@ export interface HttpVoiceBackendOptions {
 
 /** Implements the bodyless POST protocol described in docs/backend.md. */
 export function createHttpVoiceBackend(options: HttpVoiceBackendOptions): VoiceBackend;
+
+/** The Ink Agent Worker port used by the transcript transport. */
+export interface VoiceWorkerPort {
+  readonly closed: boolean;
+  postMessage(value: unknown): void;
+  close(): void;
+  onmessage: ((event: Event & { readonly data: any }) => void) | null;
+  onmessageerror: ((event: Event) => void) | null;
+  onclose: ((event: Event) => void) | null;
+}
+
+/** Connect the foreground session to a dedicated Agent Worker for live text. */
+export function createWorkerTranscripts(
+  connectPort: (options: { signal: AbortSignal; timeout: number }) => Promise<VoiceWorkerPort>,
+  options?: {
+    timeout?: number;
+    cleanupTimeout?: number;
+    onActivity?: (activity: {
+      listening?: boolean;
+      thinking?: boolean;
+      speaking?: boolean;
+    }) => void;
+  },
+): VoiceTranscriptSource;

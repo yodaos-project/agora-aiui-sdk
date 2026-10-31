@@ -92,7 +92,7 @@ For a project with an npm bundler:
 npm install github:yodaos-project/agora-aiui-sdk
 ```
 
-AIUI Agents that load local scripts can [copy the SDK modules](docs/integration.md#aiui-agent-with-local-scripts).
+Ink resolves the SDK from the AIUI Agent’s own `node_modules`.
 With your backend and application authentication configured:
 
 ```js
