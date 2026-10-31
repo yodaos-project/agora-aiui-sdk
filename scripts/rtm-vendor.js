@@ -14,9 +14,9 @@ export async function rtmVendorSource() {
   const source = await readFile(entry, 'utf8');
   return `import { createRtmEnvironment } from './rtm-environment.js';
 const env = createRtmEnvironment();
-(function(globalThis, window, XMLHttpRequest, console, fetch, module, define) {
+(function(globalThis, window, XMLHttpRequest, console, fetch, clearTimeout, clearInterval, module, define) {
 ${source}
-})(env.scope, env.browser, env.XMLHttpRequest, env.console, env.fetch, undefined, undefined);
+})(env.scope, env.browser, env.XMLHttpRequest, env.console, env.fetch, env.clearTimeout, env.clearInterval, undefined, undefined);
 export default env.scope.AgoraRTM;
 `;
 }

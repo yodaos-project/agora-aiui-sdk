@@ -25,7 +25,7 @@ if (!binary) throw new Error('Set CHROME_BIN to Chrome/Chromium.');
 const files = {};
 async function collect(directory, prefix = '') {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.name === 'lib') continue;
+    if (prefix === 'lib/' && entry.name === 'sdk') continue;
     const key = `${prefix}${entry.name}`;
     if (entry.isDirectory()) await collect(path.join(directory, entry.name), `${key}/`);
     else files[key] = await readFile(path.join(directory, entry.name), 'utf8');

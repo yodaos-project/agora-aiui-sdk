@@ -1,65 +1,61 @@
 # Agora AIUI SDK
 
-**Give your AIUI Agent a voice. Build an AI assistant people can talk to.**
+**Give your AIUI Agent a voice people can talk to.**
 
 [![Checks](https://github.com/yodaos-project/agora-aiui-sdk/actions/workflows/check.yml/badge.svg)](https://github.com/yodaos-project/agora-aiui-sdk/actions/workflows/check.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 English · [简体中文](README.zh-CN.md)
 
-[Get started](docs/getting-started.md) · [Documentation](docs/README.md) · [Example AIUI Agent](examples/agent) · [API](docs/api.md)
+[Get started](docs/getting-started.md) · [Try the example](examples/agent) · [API reference](docs/api.md)
 
 ## What is a Voice Agent?
 
-A Voice Agent is an AI assistant you speak to. You ask a question through a
-microphone; it understands your words, prepares a response, and speaks back.
-It brings a conversation to your AIUI Agent without asking people to type or read a screen.
+A Voice Agent is an AI assistant you can speak with. It listens to your question,
+understands what you mean, and answers aloud. With interruptions enabled, you can
+speak while it is answering and guide the conversation in a new direction.
 
-With this SDK, your AIUI Agent running on [Ink](https://github.com/jsar-project/ink) captures your
-voice and plays the reply. Agora's cloud Voice Agent handles speech recognition,
-the language model, and speech synthesis. You choose those services in Agora
-Agent Studio.
+Voice keeps your hands free and lets you focus on what you are doing. It works
+well for AI glasses, language practice, interactive guides, and step-by-step help.
 
-### Why voice?
+**Agora AIUI SDK** brings these conversations to AIUI Agents running on
+[Ink](https://github.com/jsar-project/ink). Your AIUI Agent captures speech and
+plays replies; Agora Cloud provides speech recognition, the language model, and
+the AI's voice. Configure its personality, language, and voice in Agora Agent Studio.
 
-- **Keep hands free.** Useful on AI glasses and while doing another task.
-- **Make interactions approachable.** Let people ask in their own words.
-- **Guide people as they go.** Deliver instructions, explanations, or practice as a conversation.
+## What you can build
 
-### What can you build?
+| Use case             | Try saying…                           |
+| -------------------- | ------------------------------------- |
+| AI glasses assistant | “Tell me what to do next.”            |
+| Language practice    | “Help me practice ordering a coffee.” |
+| Interactive guide    | “Tell me more about this exhibit.”    |
+| Product onboarding   | “Walk me through setting this up.”    |
 
-| Use case             | Example conversation                |
-| -------------------- | ----------------------------------- |
-| AI glasses assistant | “Explain the next step.”            |
-| Language practice    | “Let's practice ordering a coffee.” |
-| Product onboarding   | “How do I use this feature?”        |
-| Interactive guide    | “Tell me more about this exhibit.”  |
+## A conversation, ready to adapt
 
-These are starting points. The agent's knowledge, language, and behavior come
-from the cloud configuration you provide.
+The included example is a compact voice companion named **小语**, designed for
+color and green-only glasses displays.
 
-## What this SDK does
+- **Speak naturally.** Two-way audio with microphone and speaker controls.
+- **Interrupt the reply.** Full-duplex conversation on hosts with echo cancellation or with headphones.
+- **See what was heard.** Your latest recognized speech updates in a single line.
+- **Follow the conversation.** An animated orb shows listening, thinking, speaking, and confirmed interruptions.
+- **Keep the interface responsive.** Native Ink processes real-time text in an Agent Worker, separately from page animation and audio.
 
-- **Two-way voice:** send microphone audio and hear AI replies through Agora WHIP and WebRTC.
-- **Call controls:** start, end, mute the microphone or speaker, and adjust volume.
-- **Useful feedback:** read connection states and local/remote audio levels.
-- **Live conversation text:** receive ASR partial results and streaming AI replies through Agora RTM.
-- **Flexible setup:** use the included session backend, your own backend, or existing temporary credentials.
-- **Ready-to-adapt example:** a compact Ink page for glasses, with color and green-only themes.
+The SDK also exposes AI reply text, audio levels, connection states, and volume
+controls for your own interface. The example keeps AI reply text off the screen.
 
-The example takes turns speaking: microphone transmission pauses while the AI
-replies and resumes afterward. The SDK also supports full-duplex conversation
-on hosts with working echo cancellation. See [audio controls](docs/api.md#take-turns-speaking).
+Audio uses Ink's WHIP and WebRTC APIs. Live text uses the official Agora RTM SDK,
+loaded by the example's Worker. JavaScript modules and TypeScript declarations are included.
 
-The audio-only client uses Ink's media APIs without extra runtime packages.
-Live text adds the optional official Agora RTM module, prepared by the example command.
-JavaScript modules and TypeScript declarations are included.
+## Run your first conversation
 
-## Start with the example
+You will need:
 
-You need Node.js 22+, an Ink host with WHIP and microphone support, an Agora
-project enabled for duplex WHIP and Signaling, and a published voice agent in Agent Studio.
-Agora cloud usage may incur charges under your plan.
+- Node.js 22+ and a recent Ink host with microphone, WHIP, and Worker networking support.
+- An Agora project enabled for duplex WHIP and Signaling (RTM).
+- A published voice agent in Agora Agent Studio and its `pipelineId`.
 
 ```sh
 git clone https://github.com/yodaos-project/agora-aiui-sdk.git
@@ -68,23 +64,36 @@ npm ci
 npm run example:prepare
 ```
 
-Then follow the **[getting started guide](docs/getting-started.md)** to configure
-Agora, start the reference backend, and open the example in Ink. It walks through
-where to find each value, including `pipelineId`.
+Follow the **[getting started guide](docs/getting-started.md)** to find your Agora
+settings, configure the reference backend, and point the AIUI Agent at it.
 
-Your first milestone: tap **开始聊天** (Start chat), speak, hear the AI answer, then tap
-**结束通话** (End call). Keep the AIUI Agent in the foreground during the call.
+Start the configured backend in one terminal:
 
-## A call in JavaScript
+```sh
+npm run example:server
+```
 
-For a project with an npm bundler, install from GitHub:
+Open the example in another terminal:
+
+```sh
+ink-open examples/agent --networking-transport native --permission-checks --theme yodaos-sprite-color
+```
+
+Tap **开始聊天** (Start chat), allow the microphone, and ask a question. Try
+interrupting a longer answer. Tap **结束** (End) when you are done.
+Keep the AIUI Agent in the foreground; if playback pauses after switching windows,
+tap **继续聊天** (Continue chatting).
+
+## Add voice to your AIUI Agent
+
+For a project with an npm bundler:
 
 ```sh
 npm install github:yodaos-project/agora-aiui-sdk
 ```
 
-Once your backend and AIUI Agent configuration are ready, start a call like this.
-AIUI Agents that load local scripts can [copy the SDK files instead](docs/integration.md#aiui-agent-with-local-scripts).
+AIUI Agents that load local scripts can [copy the SDK modules](docs/integration.md#aiui-agent-with-local-scripts).
+With your backend and application authentication configured:
 
 ```js
 import { createAgoraVoiceSession, createHttpVoiceBackend } from '@yodaos-pkg/agora-aiui-sdk';
@@ -94,61 +103,68 @@ const backend = createHttpVoiceBackend({
   baseURL: configuration.backendURL,
   authorization: configuration.authorization,
 });
-
 const voice = createAgoraVoiceSession({ backend });
 
-voice.addEventListener('statechange', () => {
-  console.log(voice.getState());
-});
-
-// Run from your Connect button.
+// In your Start button handler:
 await voice.start();
+
+// In your End button or page unload handler:
+await voice.stop();
 ```
 
-Call `voice.stop()` from your End button and page unload handler. Create a new
-session for the next call. See [add voice to your AIUI Agent](docs/integration.md) for
-installation, page lifecycle, and audio controls.
+Create a new session for each call. The [integration guide](docs/integration.md)
+shows a complete page with lifecycle handling and audio controls. Use the
+[example Worker](examples/agent/workers/transcripts.js) to add live text.
 
-## How the pieces fit together
+## How it works
 
-| Piece                      | Responsibility                                              |
-| -------------------------- | ----------------------------------------------------------- |
-| Your AIUI Agent + this SDK | Capture speech, play replies, and show call controls.       |
-| Your session backend       | Issue temporary credentials and start/stop the cloud agent. |
-| Agora Cloud                | Carry the audio and run the configured AI conversation.     |
+| Piece                | Responsibility                                              |
+| -------------------- | ----------------------------------------------------------- |
+| Your AIUI Agent      | Capture speech, play replies, and present the conversation. |
+| Your session backend | Issue temporary credentials and start/stop the cloud AI.    |
+| Agora Cloud          | Transport audio and run your configured voice agent.        |
 
 Audio travels directly between Ink and Agora Cloud. The session backend handles
-setup and cleanup. The included Node.js backend is a starting point for your own
-service; you can also [connect with existing credentials](docs/integration.md#use-existing-temporary-credentials).
+setup and cleanup. Use the included Node.js backend as a starting point, connect
+your own service, or [use existing temporary credentials](docs/integration.md#use-existing-temporary-credentials)
+when your system already manages the cloud AI.
 
-Keep the **App Certificate and model API keys on the server**. The reference
-backend configures distinct **string UIDs** for the AIUI Agent and cloud AI, as required by
-this cloud voice integration.
+**Keep App Certificates and model API keys on the server.** The reference backend
+uses different string UIDs for the AIUI Agent and the cloud AI.
+
+## Compatibility and verification
+
+The macOS example has been tested with real Agora audio, live ASR, interruptions,
+and repeated connect/stop cycles. The user confirmed fluent speech and interruptions;
+measurements and host-specific results are in [verification notes](docs/validation.md#real-cloud-results).
+
+Native Ink runs the RTM Worker on a separate thread. Ink Web currently shares its
+browser event loop with the Worker realm; measure Web performance separately.
+For hosts without echo cancellation, use headphones or [turn-taking mode](docs/api.md#take-turns-speaking).
+
+This version focuses on foreground conversations. Automatic call reconnection,
+background calling, general chat messaging, local tool calls, and word captions
+synchronized to playback are outside the current API.
 
 ## Documentation
 
-| I want to…                                                | Read                                               |
-| --------------------------------------------------------- | -------------------------------------------------- |
-| Have my first conversation                                | [Getting started](docs/getting-started.md)         |
-| Add voice to an existing AIUI Agent                       | [Integration guide](docs/integration.md)           |
-| Configure Agora or use my own backend                     | [Backend guide](docs/backend.md)                   |
-| Look up a method or option                                | [API reference](docs/api.md)                       |
-| Fix silence, a failed connection, or interrupted playback | [Troubleshooting](docs/troubleshooting.md)         |
-| Check test coverage or contribute                         | [Development and verification](docs/validation.md) |
-
-Version 0.1.0 focuses on foreground voice conversations. Playback-synchronized word captions, general chat messaging,
-local tool calls, automatic reconnection, and background calling are not included.
-Ink Web has passed repeated real-cloud voice tests; see [verification scope](docs/validation.md#real-cloud-results)
-for host-specific results and remaining checks.
+| I want to…                      | Read                                               |
+| ------------------------------- | -------------------------------------------------- |
+| Have my first conversation      | [Getting started](docs/getting-started.md)         |
+| Add voice to an AIUI Agent      | [Integration guide](docs/integration.md)           |
+| Set up Agora and authentication | [Backend guide](docs/backend.md)                   |
+| Find a method or option         | [API reference](docs/api.md)                       |
+| Fix a connection or audio issue | [Troubleshooting](docs/troubleshooting.md)         |
+| Run tests or contribute         | [Development and verification](docs/validation.md) |
 
 ## Contribute
 
-Found a problem or have an idea? [Open an issue](https://github.com/yodaos-project/agora-aiui-sdk/issues).
-Include your Ink host, SDK version, and a short reproduction. Please leave out credentials.
+Questions, bugs, and ideas are welcome in [GitHub Issues](https://github.com/yodaos-project/agora-aiui-sdk/issues).
+Include your Ink host, SDK version, and a short reproduction without credentials.
 
 ```sh
 npm ci
 npm run check
 ```
 
-Contributions are welcome. This project is released under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE). Agora Cloud usage follows your Agora plan.

@@ -141,7 +141,7 @@ export function createAgoraRtmTranscripts({ RTM, timeout } = {}) {
       function close() {
         if (closing) return closing;
         closed = true;
-        clearTimeout(timer);
+        if (timer != null) clearTimeout(timer);
         signal?.removeEventListener('abort', abort);
         controller.abort();
         for (const remove of listeners.splice(0)) remove();
@@ -253,7 +253,7 @@ export function createAgoraRtmTranscripts({ RTM, timeout } = {}) {
           abort();
           throw textError();
         } finally {
-          clearTimeout(timer);
+          if (timer != null) clearTimeout(timer);
         }
       })();
       return Object.freeze({ ready, close });

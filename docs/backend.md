@@ -31,6 +31,8 @@ Copy the ID from the generated code; do not reuse the snippet's temporary tokens
 for ongoing calls. See [Agora's embed guide](https://docs.agora.io/en/ai/studio/deploy/connect-agent).
 
 The pipeline supplies the speech recognition, language model, and voice settings.
+The example enables voice interruption when starting the AI. Pair it with
+working client echo cancellation or headphones; use half-duplex mode otherwise.
 Optionally set `AGORA_ASR_LANGUAGE=zh-CN` in the backend environment for Chinese
 ARES recognition. Otherwise the example keeps the pipeline language. A vendor's
 `asr.params.language` may take precedence over this setting.

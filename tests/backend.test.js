@@ -323,6 +323,7 @@ test('official Agora server SDK preserves string accounts in join, auth and RTC 
     pipelineId: 'test-pipeline',
     area: 'AP',
     enableRtm: true,
+    enableInterruption: true,
     asrLanguage: 'zh-CN',
   });
   const bot = factory({
@@ -350,6 +351,7 @@ test('official Agora server SDK preserves string accounts in join, auth and RTC 
   assert.equal(payload.properties.agent_rtc_uid, 'agent-test');
   assert.deepEqual(payload.properties.remote_rtc_uids, ['aiui-test']);
   assert.equal(payload.properties.enable_string_uid, true);
+  assert.deepEqual(payload.properties.interruption, { enable: true });
   assert.equal(payload.properties.advanced_features.enable_rtm, true);
   assert.equal(payload.properties.parameters.data_channel, 'rtm');
   assert.deepEqual(payload.properties.asr, { language: 'zh-CN' });

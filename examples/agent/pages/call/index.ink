@@ -1,12 +1,9 @@
 <script setup>
-  import {
-    createAgoraVoiceSession,
-    createHttpVoiceBackend,
-    createAgoraRtmTranscripts,
-  } from '../../lib/sdk/index.js';
-  import AgoraRTM from '../../lib/sdk/rtm-vendor.js';
+  import { createAgoraVoiceSession } from '../../lib/sdk/session.js';
+  import { createHttpVoiceBackend } from '../../lib/sdk/http-backend.js';
+  import { createWorkerTranscripts } from '../../lib/transcript-channel.js';
   import configuration from '../../configuration.js';
-  import { changedFields, presentCall } from './presentation.js';
+  import { changedFields, presentCall, readConversation } from './presentation.js';
 
   export default {
     data: {
@@ -18,17 +15,31 @@
       bar1: 3,
       bar2: 3,
       bar3: 3,
-      transcripts: [],
-      showTranscripts: true,
+      orbScale: 1,
+      userLine: '',
       transcriptNote: '',
     },
     onLoad() {
       this.unloaded = false;
+      this.cloudActivity = {};
       this.backend = createHttpVoiceBackend({
         baseURL: configuration.backendURL,
         authorization: configuration.authorization,
       });
-      this.transcriptSource = createAgoraRtmTranscripts({ RTM: AgoraRTM.RTM });
+      const source = createWorkerTranscripts((options) => this.connectWorker('transcripts', options));
+      // Observe the existing source contract and preserve the SDK's activity callback.
+      this.transcriptSource = {
+        connect: (options) =>
+          source.connect({
+            ...options,
+            onActivity: (activity) => {
+              options.onActivity?.(activity);
+              if (this.unloaded || options.signal.aborted) return;
+              this.cloudActivity = { ...this.cloudActivity, ...activity };
+              if (this.voice) this.refreshAudio(this.voice);
+            },
+          }),
+      };
     },
     onUnload() {
       this.unloaded = true;
@@ -41,12 +52,16 @@
       if (this.levelTimer != null) clearInterval(this.levelTimer);
       this.levelTimer = null;
     },
-    renderCall(state, speaking = false, bars = [3, 3, 3]) {
+    renderCall(state, speaking = false, bars = [3, 3, 3], energy = 0) {
       const elapsed = this.startedAt ? Math.floor((Date.now() - this.startedAt) / 1000) : 0;
       const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
       const seconds = String(elapsed % 60).padStart(2, '0');
+      if (Date.now() < (this.interruptedUntil || 0)) bars = [3, 3, 3];
       const patch = changedFields(this.data, {
-        ...presentCall(state, speaking),
+        ...presentCall(state, speaking, {
+          thinking: this.cloudActivity?.thinking,
+          interrupted: Date.now() < (this.interruptedUntil || 0),
+        }),
         micMuted: state.microphoneMuted,
         micSuppressed: state.microphoneSuppressed,
         speakerMuted: state.speakerMuted,
@@ -54,6 +69,7 @@
         bar1: bars[0],
         bar2: bars[1],
         bar3: bars[2],
+        orbScale: 1 + Math.round(energy * 8) / 100,
       });
       if (Object.keys(patch).length) this.setData(patch);
     },
@@ -62,14 +78,17 @@
       this.clearLevelTimer();
       this.clearTranscripts();
       if (this.voice && this.update) this.voice.removeEventListener('statechange', this.update);
-      this.setData({ transcripts: [], transcriptNote: '' });
+      this.setData({ userLine: '', transcriptNote: '' });
+      this.cloudActivity = {};
+      this.interruptedUntil = 0;
+      this.interruptedKey = '';
       this.startedAt = 0;
       this.speakingUntil = 0;
       const voice = createAgoraVoiceSession({
         backend: this.backend,
         timeout: 45000,
         transcripts: this.transcriptSource,
-        microphoneMode: 'half-duplex',
+        microphoneMode: configuration.microphoneMode ?? 'full-duplex',
       });
       this.voice = voice;
       this.update = () => {
@@ -92,7 +111,7 @@
         if (this.unloaded || this.voice !== voice || voice.getState().lifecycle !== 'running')
           return;
         this.startedAt = Date.now();
-        this.levelTimer = setInterval(() => this.refreshAudio(voice), 200);
+        this.levelTimer = setInterval(() => this.refreshAudio(voice), 160);
         this.refreshAudio(voice);
         this.refreshTranscripts(voice);
       } catch {
@@ -104,18 +123,22 @@
       const state = voice.getState();
       const audible = state.audio === 'running' && state.media === 'connected';
       const levels = audible ? voice.getAudioLevels() : { local: -60, remote: -60 };
-      // A short hold keeps the indicator steady between words; it does not infer AI turn events.
       if (audible && !state.speakerMuted && levels.remote > -46)
-        this.speakingUntil = Date.now() + 500;
+        this.speakingUntil = Date.now() + 450;
       if (!audible || state.speakerMuted) this.speakingUntil = 0;
       const speaking = Date.now() < this.speakingUntil;
-      const level = speaking ? levels.remote : state.microphoneMuted ? -60 : levels.local;
+      const level = speaking
+        ? levels.remote
+        : state.microphoneMuted || state.microphoneSuppressed
+          ? -60
+          : levels.local;
       const energy = audible ? Math.max(0, Math.min(1, (level + 55) / 35)) : 0;
-      this.renderCall(state, speaking, [
-        3 + Math.round(energy * 5),
-        3 + Math.round(energy * 11),
-        3 + Math.round(energy * 17),
-      ]);
+      this.renderCall(
+        state,
+        speaking,
+        [3 + Math.round(energy * 8), 3 + Math.round(energy * 16), 3 + Math.round(energy * 24)],
+        energy,
+      );
     },
     clearTranscripts() {
       if (this.transcriptUpdate)
@@ -126,22 +149,31 @@
       this.transcriptStateUpdate = null;
     },
     refreshTranscripts(voice) {
-      if (this.unloaded || this.voice !== voice || !this.data.showTranscripts) return;
+      if (this.unloaded || this.voice !== voice) return;
       const state = voice.getTranscriptState();
-      this.setData({
-        transcripts: [...voice.getTranscriptSnapshot()].reverse(),
+      if (['failed', 'disconnected', 'closed'].includes(state.status)) this.cloudActivity = {};
+      const columns = Math.max(
+        12,
+        Math.min(24, Math.floor(((window.innerWidth || 448) - 48) / 17)),
+      );
+      const { userLine, interruptedKey } = readConversation(voice.getTranscriptSnapshot(), columns);
+      if (interruptedKey && interruptedKey !== this.interruptedKey) {
+        this.interruptedKey = interruptedKey;
+        this.interruptedUntil = Date.now() + 1200;
+        this.speakingUntil = 0;
+        this.cloudActivity = {};
+      }
+      const patch = changedFields(this.data, {
+        userLine,
         transcriptNote:
           state.status === 'failed'
-            ? '实时文字暂不可用，语音可以继续。'
+            ? '实时文字暂不可用，语音可以继续'
             : state.status === 'disconnected'
               ? '文字连接恢复中…'
               : '',
       });
-    },
-    toggleTranscripts() {
-      const showTranscripts = !this.data.showTranscripts;
-      this.setData({ showTranscripts });
-      if (showTranscripts && this.voice) this.refreshTranscripts(this.voice);
+      if (Object.keys(patch).length) this.setData(patch);
+      this.refreshAudio(voice);
     },
     toggleMicrophone() {
       if (this.data.canControl) this.voice?.setMicrophoneMuted(!this.data.micMuted);
@@ -155,9 +187,8 @@
       try {
         await voice.resumeAudio();
       } catch {
-        if (!this.unloaded && this.voice === voice && this.data.canResume) {
-          this.setData({ hint: '请回到前台，再点击继续聊天。' });
-        }
+        if (!this.unloaded && this.voice === voice && this.data.canResume)
+          this.setData({ hint: '请回到前台，再点击继续聊天' });
       }
     },
     stop() {
@@ -168,13 +199,11 @@
   };
 </script>
 <page>
-  <view class="screen">
+  <view class="screen state-{{phase}}">
     <view class="header">
       <view class="identity">
         <text class="name">小语</text>
-        <button class="transcript-toggle" bindtap="toggleTranscripts">
-          <text>{{showTranscripts ? '收起文字' : '显示文字'}}</text>
-        </button>
+        <text class="activity">{{title}}</text>
       </view>
       <view class="connection {{connected ? 'online' : ''}}">
         <view class="connection-dot"></view>
@@ -183,92 +212,62 @@
       </view>
     </view>
 
-    <view ink:if="{{!showTranscripts || !transcripts.length}}" class="conversation">
-      <view class="avatar">
-        <view class="avatar-inner {{phase === 'speaking' ? 'responding' : ''}}">
-          <image class="portrait" src="/assets/companion.svg" mode="aspectFit" />
+    <view class="presence">
+      <view class="orb-envelope" style="transform: scale({{orbScale}});">
+        <view class="orb-halo"></view>
+        <view class="orb-orbit"></view>
+        <view class="orb">
+          <view class="orb-light"></view>
+          <view class="orb-fluid"></view>
+          <view class="orb-tide"></view>
+          <view class="orb-glint"></view>
+          <view ink:if="{{phase === 'thinking' || phase === 'connecting'}}" class="thought">
+            <view class="thought-dot dot-one"></view>
+            <view class="thought-dot dot-two"></view>
+            <view class="thought-dot dot-three"></view>
+          </view>
+          <view ink:else class="wave">
+            <view class="wave-bar" style="transform: scaleY({{bar1 / 30}});"></view>
+            <view class="wave-bar" style="transform: scaleY({{bar2 / 30}});"></view>
+            <view class="wave-bar" style="transform: scaleY({{bar3 / 30}});"></view>
+            <view class="wave-bar" style="transform: scaleY({{bar2 / 30}});"></view>
+            <view class="wave-bar" style="transform: scaleY({{bar1 / 30}});"></view>
+          </view>
         </view>
-      </view>
-      <view class="words">
-        <text class="title {{phase === 'speaking' ? 'responding-title' : ''}}">{{title}}</text>
-        <button
-          class="hint-button {{canResume ? 'resume' : ''}}"
-          disabled="{{!canResume}}"
-          bindtap="resumeAudio"
-        >
-          <text class="hint-copy {{canResume ? 'resume-copy' : ''}}"
-            >{{showTranscripts && transcriptNote ? transcriptNote : hint}}</text
-          >
-        </button>
-        <view class="voice-signal">
-          <view
-            class="bar {{phase === 'ready' || phase === 'speaking' ? 'live-bar' : ''}}"
-            style="height: {{bar1}}px;"
-          ></view>
-          <view
-            class="bar {{phase === 'ready' || phase === 'speaking' ? 'live-bar' : ''}}"
-            style="height: {{bar2}}px;"
-          ></view>
-          <view
-            class="bar {{phase === 'ready' || phase === 'speaking' ? 'live-bar' : ''}}"
-            style="height: {{bar3}}px;"
-          ></view>
-          <view
-            class="bar {{phase === 'ready' || phase === 'speaking' ? 'live-bar' : ''}}"
-            style="height: {{bar2}}px;"
-          ></view>
-          <view
-            class="bar {{phase === 'ready' || phase === 'speaking' ? 'live-bar' : ''}}"
-            style="height: {{bar1}}px;"
-          ></view>
-        </view>
+        <view ink:if="{{phase === 'interrupted'}}" class="interrupt-ring"></view>
       </view>
     </view>
 
-    <scroll-view ink:else class="transcripts" scroll-y="true">
-      <view
-        class="message {{item.role === 'user' ? 'user-message' : 'assistant-message'}}"
-        ink:for="{{transcripts}}"
-        ink:key="id"
-      >
-        <text class="message-author"
-          >{{item.role === 'user' ? '你说的' : '小语'}}{{item.interrupted ? ' · 已打断' :
-          item.status === 'in-progress' ? ' · 进行中' : ''}}</text
-        >
-        <text class="message-text">{{item.text}}</text>
-      </view>
-      <text ink:if="{{transcriptNote}}" class="transcript-note">{{transcriptNote}}</text>
-    </scroll-view>
+    <text class="user-line {{userLine && !transcriptNote ? 'has-speech' : ''}}"
+      >{{phase === 'failed' || phase === 'paused' || phase === 'recovering' ? hint : transcriptNote
+      || userLine || hint}}</text
+    >
 
     <view ink:if="{{active}}" class="controls">
       <button
         ink:if="{{canControl}}"
-        class="control {{micMuted ? 'is-muted' : ''}}"
+        class="control {{micMuted || micSuppressed ? 'is-muted' : ''}}"
         disabled="{{!canControl || micSuppressed}}"
         bindtap="toggleMicrophone"
       >
         <image
+          ink:if="{{!micSuppressed}}"
           class="control-icon"
           src="{{micMuted || micSuppressed ? '/assets/microphone-off.svg' : '/assets/microphone.svg'}}"
           mode="aspectFit"
         />
         <text>{{micSuppressed ? '等我说完' : micMuted ? '开麦' : '静音'}}</text>
       </button>
-      <button
-        ink:if="{{canResume && showTranscripts && transcripts.length}}"
-        class="control resume-action"
-        bindtap="resumeAudio"
-      >
-        <text>继续聊天</text>
-      </button>
       <button class="control end" disabled="{{phase === 'stopping'}}" bindtap="stop">
         <image class="control-icon" src="/assets/end.svg" mode="aspectFit" />
-        <text>{{phase === 'connecting' ? '取消' : '结束通话'}}</text>
+        <text>{{phase === 'connecting' ? '取消' : '结束'}}</text>
+      </button>
+      <button ink:if="{{canResume}}" class="resume" bindtap="resumeAudio">
+        <text>继续聊天</text>
       </button>
       <button
-        ink:if="{{canControl && !(canResume && showTranscripts && transcripts.length)}}"
+        ink:if="{{canControl && !canResume}}"
         class="control {{speakerMuted ? 'is-muted' : ''}}"
-        disabled="{{!canControl}}"
         bindtap="toggleSpeaker"
       >
         <image
@@ -276,14 +275,14 @@
           src="{{speakerMuted ? '/assets/speaker-off.svg' : '/assets/speaker.svg'}}"
           mode="aspectFit"
         />
-        <text>{{speakerMuted ? '开声音' : '扬声器'}}</text>
+        <text>{{speakerMuted ? '开声音' : '声音'}}</text>
       </button>
     </view>
     <view ink:else class="controls">
       <button class="start" disabled="{{busy}}" bindtap="connect">
         <image class="control-icon" src="/assets/call.svg" mode="aspectFit" />
         <text
-          >{{phase === 'failed' ? '再试一次' : phase === 'stopped' ? '再聊一会儿' :
+          >{{phase === 'failed' ? '重新连接' : phase === 'stopped' ? '再聊一会儿' :
           '开始聊天'}}</text
         >
       </button>
@@ -295,9 +294,9 @@
     width: 100%;
     height: 100vh;
     box-sizing: border-box;
-    padding: 18px 22px;
+    padding: 20px 24px;
+    gap: 14px;
     flex-direction: column;
-    gap: 12px;
     background-color: var(--color-background);
     color: var(--color-text-primary);
   }
@@ -310,26 +309,24 @@
   }
   .header {
     width: 100%;
-    justify-content: space-between;
-    flex-shrink: 0;
     min-height: 20px;
+    flex-shrink: 0;
+    justify-content: space-between;
   }
   .identity {
-    gap: 8px;
+    gap: 10px;
   }
   .name {
-    font-size: 17px;
-    font-weight: 600;
-  }
-  .role,
-  .cloud,
-  .clock {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--color-text-secondary);
   }
+  .activity {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-primary);
+  }
   .connection {
-    gap: 6px;
-    flex-shrink: 0;
+    gap: 5px;
   }
   .connection-dot {
     width: 4px;
@@ -337,235 +334,439 @@
     border-radius: 2px;
     background-color: var(--color-text-secondary);
   }
+  .cloud,
+  .clock {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+  }
+  .clock {
+    margin-left: 4px;
+  }
   .online .connection-dot {
     background-color: var(--color-secondary);
   }
-  .online .cloud {
-    color: var(--color-secondary);
-  }
-  .clock {
-    margin-left: 6px;
-  }
-  .conversation {
-    width: 100%;
-    flex-direction: column;
+  .presence {
     flex: 1;
     min-height: 0;
     align-items: center;
     justify-content: center;
-    gap: 16px;
   }
-  .avatar {
+  .orb-envelope {
     position: relative;
-    width: 96px;
-    height: 96px;
+    width: 108px;
+    height: 108px;
     flex-shrink: 0;
-    border-radius: 48px;
+    transition: transform 160ms ease-out;
+  }
+  .orb-halo {
+    position: absolute;
+    width: 160%;
+    height: 160%;
+    left: -30%;
+    top: -30%;
+    border-radius: 50%;
+    background-image: radial-gradient(
+      circle at center,
+      var(--color-primary-40) 0%,
+      transparent 68%
+    );
+    opacity: 0.7;
+    animation: aura-breathe 3.6s ease-in-out infinite alternate;
+  }
+  .orb-orbit {
+    position: absolute;
+    top: -8%;
+    left: -8%;
+    width: 116%;
+    height: 116%;
+    border-radius: 50%;
     border: 1px solid var(--color-primary-40);
+    opacity: 0.5;
+    animation: orbit-breathe 3.6s ease-in-out infinite alternate;
+  }
+  .orb {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
     align-items: center;
     justify-content: center;
+    background-color: var(--color-primary);
   }
-  .avatar-inner {
-    width: 80px;
-    height: 80px;
-    border-radius: 40px;
-    border: 1px solid var(--color-primary);
-    align-items: center;
-    justify-content: center;
+  .orb-light {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    background-image: radial-gradient(
+      circle at 35% 25%,
+      var(--color-text-primary) 0%,
+      var(--color-primary) 45%,
+      var(--color-background) 100%
+    );
   }
-  .portrait {
-    width: 61px;
-    height: 61px;
-    --image-svg-tint: var(--color-primary);
+  .orb-fluid {
+    position: absolute;
+    width: 140%;
+    height: 140%;
+    left: -20%;
+    top: -20%;
+    background-image: radial-gradient(
+      ellipse at 20% 45%,
+      var(--color-secondary) 0%,
+      transparent 62%
+    );
+    animation: fluid-drift 7s ease-in-out infinite alternate;
   }
-  .words {
-    flex-direction: column;
-    align-items: center;
-    gap: 5px;
+  .orb-tide {
+    position: absolute;
+    width: 130%;
+    height: 130%;
+    left: -15%;
+    top: -15%;
+    background-image: radial-gradient(
+      ellipse at 65% 75%,
+      var(--color-text-primary) 0%,
+      transparent 55%
+    );
+    opacity: 0.7;
+    animation: fluid-drift 5s ease-in-out infinite alternate-reverse;
   }
-  .title {
-    font-size: 24px;
-    line-height: 30px;
-    font-weight: 600;
+  .orb-glint {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    border-radius: 50%;
+    border: 1px solid var(--color-primary-60);
+    opacity: 0.8;
   }
-  .hint-copy {
-    color: var(--color-text-secondary);
-    font-size: 14px;
-    line-height: 20px;
-  }
-  .voice-signal {
-    height: 20px;
+  .wave,
+  .thought {
     flex-direction: row;
     align-items: center;
     justify-content: center;
     gap: 4px;
+    height: 34px;
   }
-  .bar {
-    width: 3px;
-    min-height: 3px;
+  .wave-bar {
+    width: 4px;
+    height: 30px;
+    border-radius: 3px;
+    background-color: var(--color-background);
+    opacity: 0.78;
+    transition: transform 140ms ease-out;
+  }
+  .thought-dot {
+    width: 4px;
+    height: 4px;
     border-radius: 2px;
-    background-color: var(--color-primary-40);
+    background-color: var(--color-background);
+    animation: thought-pulse 900ms ease-in-out infinite alternate;
   }
-  .live-bar {
-    background-color: var(--color-primary);
+  .dot-two {
+    animation-delay: 200ms;
   }
-  .responding {
+  .dot-three {
+    animation-delay: 400ms;
+  }
+  .state-thinking .orb-fluid,
+  .state-connecting .orb-fluid {
+    animation: fluid-turn 1.8s linear infinite;
+  }
+  .state-thinking .orb-orbit,
+  .state-connecting .orb-orbit {
+    animation: orbit-breathe 900ms ease-in-out infinite alternate;
+  }
+  .state-speaking .orb-fluid {
+    animation: fluid-drift 1.4s ease-in-out infinite alternate;
+  }
+  .state-speaking .orb-tide {
+    animation: fluid-turn 3s linear infinite;
+  }
+  .state-speaking .orb-orbit {
     border-color: var(--color-secondary);
+    animation-duration: 700ms;
   }
-  .responding-title {
-    color: var(--color-primary);
+  .state-interrupted .orb-fluid {
+    animation: interrupt-settle 350ms ease-out both;
+  }
+  .interrupt-ring {
+    position: absolute;
+    left: -6%;
+    top: -6%;
+    width: 112%;
+    height: 112%;
+    border-radius: 50%;
+    border: 1px solid var(--color-text-primary);
+    animation: interrupt-release 1.1s ease-out both;
+  }
+  .state-idle .orb-envelope,
+  .state-stopped .orb-envelope,
+  .state-stopping .orb-envelope,
+  .state-failed .orb-envelope,
+  .state-muted .orb-envelope,
+  .state-paused .orb-envelope,
+  .state-quiet .orb-envelope,
+  .state-recovering .orb-envelope {
+    opacity: 0.42;
+  }
+  .state-idle .orb-fluid,
+  .state-idle .orb-tide,
+  .state-idle .orb-halo,
+  .state-idle .orb-orbit,
+  .state-stopped .orb-fluid,
+  .state-stopped .orb-tide,
+  .state-stopped .orb-halo,
+  .state-stopped .orb-orbit,
+  .state-stopping .orb-fluid,
+  .state-stopping .orb-tide,
+  .state-stopping .orb-halo,
+  .state-stopping .orb-orbit,
+  .state-failed .orb-fluid,
+  .state-failed .orb-tide,
+  .state-failed .orb-halo,
+  .state-failed .orb-orbit,
+  .state-muted .orb-fluid,
+  .state-muted .orb-tide,
+  .state-muted .orb-halo,
+  .state-muted .orb-orbit,
+  .state-paused .orb-fluid,
+  .state-paused .orb-tide,
+  .state-paused .orb-halo,
+  .state-paused .orb-orbit,
+  .state-quiet .orb-fluid,
+  .state-quiet .orb-tide,
+  .state-quiet .orb-halo,
+  .state-quiet .orb-orbit,
+  .state-recovering .orb-fluid,
+  .state-recovering .orb-tide,
+  .state-recovering .orb-halo,
+  .state-recovering .orb-orbit {
+    animation: none;
+  }
+  .user-line {
+    width: 100%;
+    height: 26px;
+    flex-shrink: 0;
+    font-size: 16px;
+    line-height: 26px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-text-secondary);
+  }
+  .has-speech {
+    color: var(--color-text-primary);
   }
   .controls {
-    justify-content: center;
-    gap: 10px;
     flex-shrink: 0;
+    justify-content: center;
+    gap: 14px;
+    height: 38px;
   }
   .control,
-  .start {
+  .start,
+  .resume {
     height: 38px;
-    padding: 0 14px;
-    border: 1px solid var(--border-color-muted);
-    border-radius: 19px;
+    padding: 0 15px;
+    border: 1px solid var(--color-primary-40);
+    border-radius: 20px;
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 7px;
+    gap: 6px;
     background-color: transparent;
   }
   .control text,
-  .start text {
+  .start text,
+  .resume text {
     font-size: 14px;
   }
   .control-icon {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
     --image-svg-tint: var(--color-text-primary);
   }
-  .start {
-    min-width: 152px;
-    border: 2px solid var(--color-primary);
+  .control,
+  .resume {
+    width: 88px;
+    padding-left: 0;
+    padding-right: 0;
+    flex-shrink: 0;
+  }
+  .end {
+    width: 72px;
+    background-color: var(--color-text-primary);
+    border-color: var(--color-text-primary);
+    color: var(--color-background);
+  }
+  .end:focus,
+  .end:hover {
+    background-color: var(--color-text-primary);
+    color: var(--color-background);
+    border-color: var(--color-text-primary);
+  }
+  .end .control-icon {
+    --image-svg-tint: var(--color-background);
+  }
+  .start,
+  .resume {
     color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+  .start {
+    min-width: 130px;
   }
   .start .control-icon,
   .is-muted .control-icon {
     --image-svg-tint: var(--color-primary);
   }
   .is-muted {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-  }
-  .end {
-    border-color: var(--border-color-default);
-  }
-  .hint-button {
-    padding: 0;
-    border: none;
-    background-color: transparent;
-    color: var(--color-primary);
-  }
-  .resume-copy {
-    color: var(--color-primary);
-    font-size: 14px;
-    line-height: 20px;
-  }
-  .resume-action {
     color: var(--color-primary);
     border-color: var(--color-primary);
   }
-  .transcript-toggle {
-    padding: 0;
-    border: none;
-    background-color: transparent;
-    color: var(--color-primary);
+  @keyframes aura-breathe {
+    from {
+      transform: scale(0.92);
+      opacity: 0.5;
+    }
+    to {
+      transform: scale(1.08);
+      opacity: 0.8;
+    }
   }
-  .transcript-toggle text {
-    font-size: 12px;
+  @keyframes orbit-breathe {
+    from {
+      transform: scale(0.98);
+      opacity: 0.3;
+    }
+    to {
+      transform: scale(1.08);
+      opacity: 0.65;
+    }
   }
-  .transcripts {
-    flex: 1;
-    min-height: 0;
-    width: 100%;
+  @keyframes fluid-drift {
+    from {
+      transform: rotate(-25deg) scale(0.94);
+    }
+    to {
+      transform: rotate(38deg) scale(1.1);
+    }
   }
-  .message {
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 0;
+  @keyframes fluid-turn {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
-  .message-author {
-    font-size: 12px;
-    color: var(--color-text-secondary);
+  @keyframes thought-pulse {
+    from {
+      opacity: 0.2;
+      transform: scale(0.8);
+    }
+    to {
+      opacity: 0.8;
+      transform: scale(1.15);
+    }
   }
-  .assistant-message .message-author {
-    color: var(--color-primary);
+  @keyframes interrupt-settle {
+    from {
+      transform: scale(1.15);
+    }
+    to {
+      transform: scale(0.96);
+    }
   }
-  .message-text {
-    font-size: 16px;
-    line-height: 23px;
-    color: var(--color-text-primary);
-  }
-  .transcript-note {
-    font-size: 12px;
-    color: var(--color-text-secondary);
+  @keyframes interrupt-release {
+    from {
+      transform: scale(0.96);
+      opacity: 0.9;
+    }
+    to {
+      transform: scale(1.3);
+      opacity: 0;
+    }
   }
   @media (max-height: 220px) {
     .screen {
-      padding: 9px 16px;
-      gap: 8px;
+      padding: 8px 16px;
+      gap: 5px;
     }
-    .conversation {
-      flex-direction: row;
-      gap: 20px;
-      max-width: 380px;
-      align-self: center;
+    .header {
+      min-height: 18px;
     }
-    .avatar {
-      width: 70px;
-      height: 70px;
-      border-radius: 35px;
+    .name,
+    .activity {
+      font-size: 14px;
     }
-    .avatar-inner {
-      width: 58px;
-      height: 58px;
-      border-radius: 29px;
+    .orb-envelope {
+      width: 56px;
+      height: 56px;
     }
-    .portrait {
-      width: 46px;
-      height: 46px;
+    .orb-orbit {
+      width: 110%;
+      height: 110%;
+      top: -5%;
+      left: -5%;
     }
-    .words {
-      flex: 1;
-      min-width: 0;
-      align-items: flex-start;
+    .wave {
       gap: 3px;
     }
-    .title {
-      font-size: 22px;
-      line-height: 27px;
+    .wave-bar {
+      width: 3px;
     }
-    .voice-signal {
-      height: 16px;
+    .user-line {
+      height: 23px;
+      line-height: 23px;
+      font-size: 16px;
+    }
+    .controls {
+      height: 30px;
+      gap: 12px;
     }
     .control,
-    .start {
-      height: 34px;
-      border-radius: 17px;
+    .start,
+    .resume {
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 16px;
+    }
+    .control-icon {
+      width: 14px;
+      height: 14px;
+    }
+    .control,
+    .resume {
+      width: 74px;
+      padding-left: 0;
+      padding-right: 0;
+    }
+    .end {
+      width: 64px;
     }
   }
   @media (max-width: 380px) {
     .screen {
-      padding-left: 10px;
-      padding-right: 10px;
+      padding-left: 12px;
+      padding-right: 12px;
     }
-    .role {
+    .identity {
+      gap: 6px;
+    }
+    .clock {
       display: none;
     }
-    .conversation {
-      gap: 12px;
+    .cloud {
+      font-size: 14px;
     }
-    .title {
-      font-size: 20px;
-    }
-    .control {
+    .start {
       padding-left: 10px;
       padding-right: 10px;
     }

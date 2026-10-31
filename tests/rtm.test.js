@@ -13,6 +13,36 @@ const connection = {
   token: 'temporary-rtm-token',
 };
 
+test('RTM cancels absent presence timers without changing Ink globals', () => {
+  const cancelled = [];
+  const root = {
+    navigator: { userAgent: 'Ink/0.20' },
+    clearTimeout(id) {
+      assert(id != null);
+      cancelled.push(['timeout', id]);
+    },
+    clearInterval(id) {
+      assert(id != null);
+      cancelled.push(['interval', id]);
+    },
+  };
+  const original = root.clearInterval;
+  const env = createRtmEnvironment(root);
+  for (const target of [env, env.scope, env.browser]) {
+    target.clearTimeout(null);
+    target.clearInterval(undefined);
+  }
+  env.clearTimeout(1);
+  env.scope.clearInterval(2);
+  env.browser.clearInterval(3);
+  assert.deepEqual(cancelled, [
+    ['timeout', 1],
+    ['interval', 2],
+    ['interval', 3],
+  ]);
+  assert.equal(root.clearInterval, original);
+});
+
 function fakeRtm(order = [], overrides = {}) {
   const clients = [];
   class RTM {
@@ -177,6 +207,28 @@ test('RTM timeout and close during login remove listeners and cancel the owned c
     assert(!order.includes('rtm.subscribe'));
     assert.equal(order.filter((item) => item === 'rtm.logout').length, 1);
   }
+});
+
+test('pre-cancelled RTM setup never passes an absent timer to the host', async (t) => {
+  const cancel = globalThis.clearTimeout;
+  t.mock.method(globalThis, 'clearTimeout', (timer) => {
+    assert(timer != null);
+    return cancel(timer);
+  });
+  const order = [];
+  const fake = fakeRtm(order);
+  const controller = new AbortController();
+  controller.abort();
+  const handle = createAgoraRtmTranscripts({ RTM: fake.RTM }).connect({
+    connection,
+    signal: controller.signal,
+    onUpdate: () => assert.fail('Late update'),
+    onState: () => {},
+  });
+  await assert.rejects(handle.ready, { code: 'TRANSCRIPTS' });
+  await handle.close();
+  assert.equal(fake.clients[0].listeners.size, 0);
+  assert.deepEqual(order, ['rtm.logout']);
 });
 
 test('consecutive calls with a fixed UID reuse the logged-out RTM client', async () => {

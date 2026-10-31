@@ -47,6 +47,11 @@ an image of the sample.
 This is a runtime smoke test. It does not contact Agora or prove that someone
 can hear the AI on a physical device.
 
+The example loads RTM and its Wasm in the `transcripts` Agent Worker. Native Ink
+runs it on a separate thread; audio and presentation stay on the Page. Ink Web
+currently shares the browser event loop with its Worker realm, so this architecture
+does not establish browser CPU offloading. Measure native and Web performance separately.
+
 ## Real-cloud results
 
 As of **2026-10-29**, the tested cloud voice path uses consistent string accounts
@@ -75,6 +80,15 @@ fixed account. The user confirmed that the turn-taking example no longer mixed
 AI playback or speech during the reply into the next recognized utterance.
 This uses half-duplex microphone gating, not native echo cancellation; wait for
 the AI to finish before speaking. It does not guarantee a particular ASR latency.
+
+On **2026-11-01**, a release build of macOS `ink-open` ran RTM in an Agent Worker
+against Agora Cloud. A 176-second call received 305 ASR updates. Across 30 four-second
+windows containing ASR activity, Page animation callbacks averaged 59.7–60.0 per
+second; the largest window p95 interval was 20.3 ms and the largest gap was 34.5 ms.
+Startup, shutdown and audio-suspended windows were excluded. The user confirmed
+fluent speech and interruptions. Two additional connect/stop cycles with the same
+account completed microphone, WHIP, cloud AI and RTM cleanup. These are native
+results and do not establish Web or Android performance.
 
 ## Accept a release on your target host
 

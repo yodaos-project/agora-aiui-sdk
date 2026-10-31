@@ -1,5 +1,13 @@
 {
   "pages": ["pages/call/index"],
   "permissions": ["RECORD_AUDIO"],
+  "agentWorkers": [
+    {
+      "name": "transcripts",
+      "script": "workers/transcripts.js",
+      "trigger": { "type": "open" },
+      "lifetime": "foreground"
+    }
+  ],
   "lifetime": "scene"
 }

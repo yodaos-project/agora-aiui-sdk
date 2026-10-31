@@ -27,6 +27,7 @@
 持续通话时，不要重复使用示例代码里的临时 token，见 [Agora 嵌入指南](https://docs.agora.io/en/ai/studio/deploy/connect-agent)。
 
 Pipeline 提供语音识别、模型和声音配置。
+示例会在启动 AI 时开启语音打断。客户端需要有效回声消除或使用耳机，否则请使用半双工模式。
 使用中文 ARES 时，可在后端设置 `AGORA_ASR_LANGUAGE=zh-CN`；不设置则沿用 pipeline 的识别语言。
 供应商的 `asr.params.language` 可能优先于这个设置。
 参考服务通过 [Agora 官方服务端 SDK](https://github.com/AgoraIO/agora-agents-ts)启停助手。

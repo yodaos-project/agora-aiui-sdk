@@ -12,6 +12,9 @@ Have these ready. Download [Node.js](https://nodejs.org/en/download) if needed;
 Ink desktop binaries are available from [Ink releases](https://github.com/jsar-project/ink/releases).
 Choose the `ink-open` executable for your operating system and a build with WHIP support.
 
+For the example's live text, use a recent Ink build that includes
+[Page–Worker messaging and Worker WebSockets](https://github.com/jsar-project/ink/pull/800).
+
 | Item                             | How to get it                                                                                                |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Node.js 22+ and Git              | Install them on your development computer.                                                                   |
@@ -116,11 +119,11 @@ The example already declares `RECORD_AUDIO`. Allow microphone access when your
 host or operating system asks.
 
 1. Tap **开始聊天** (Start chat).
-2. Wait for **我在，慢慢说。** and **Agora · 已连接**.
+2. Wait for **正在聆听** and **Agora · 已连接**.
 3. Say a short question in the language configured for your agent.
 4. Listen for the reply. A greeting is optional and depends on your pipeline.
-5. Watch ASR partial results and AI replies update live through RTM. Use **收起文字** to return to the voice view.
-6. Tap **结束通话** (End call) when finished.
+5. Watch your recognized speech update in one line. The orb indicates listening, thinking, speaking, and confirmed interruption; AI reply text is hidden.
+6. Tap **结束** (End) when finished.
 
 Keep Ink in the foreground. If you return from another window and see paused
 audio, tap the **继续聊天** resume prompt to resume playback.

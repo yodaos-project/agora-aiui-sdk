@@ -1,15 +1,17 @@
 const COPY = {
-  idle: { title: '嗨，想聊点什么？', hint: '我是小语，你的语音伙伴。' },
-  connecting: { title: '稍等，这就来。', hint: '正在为你接通语音…' },
-  ready: { title: '我在，慢慢说。', hint: '直接开口，就像和朋友聊天。' },
-  speaking: { title: '正在回应你', hint: '听听小语怎么说。' },
-  muted: { title: '安静陪你一会儿。', hint: '麦克风已静音，想说话时再打开。' },
-  quiet: { title: '声音暂时关掉了。', hint: '打开扬声器，就能听见回答。' },
-  paused: { title: '我们暂停一下。', hint: '回到前台后，点这里继续聊天。' },
-  recovering: { title: '稍等一下。', hint: '连接中断了，正在等待恢复。' },
-  stopping: { title: '下次再聊。', hint: '正在结束这次通话…' },
-  stopped: { title: '下次再聊。', hint: '想说话时，我还在这里。' },
-  failed: { title: '连接遇到点问题。', hint: '检查网络和配置，再试一次。' },
+  idle: { title: '准备好了', hint: '开始一段对话' },
+  connecting: { title: '正在连接', hint: '马上就好…' },
+  listening: { title: '正在聆听', hint: '说点什么，我在听' },
+  thinking: { title: '正在思考', hint: '正在想你的问题' },
+  speaking: { title: '正在说话', hint: '你可以随时插话' },
+  interrupted: { title: '已打断', hint: '我在听，你继续说' },
+  muted: { title: '麦克风已关', hint: '打开麦克风，继续聊天' },
+  quiet: { title: '声音已关', hint: '打开扬声器，听见回答' },
+  paused: { title: '播放已暂停', hint: '回到前台，继续聊天' },
+  recovering: { title: '正在重连', hint: '等待音频连接恢复…' },
+  stopping: { title: '正在结束', hint: '下次再聊' },
+  stopped: { title: '对话已结束', hint: '想说话时，我还在' },
+  failed: { title: '连接失败', hint: '检查网络和配置，再试一次' },
 };
 
 const ERRORS = {
@@ -21,8 +23,8 @@ const ERRORS = {
   LEASE: '会话已中断，可以重新开始聊天。',
 };
 
-/** Present transport and playback separately; speaking is measured audio activity, not an AI event. */
-export function presentCall(state = {}, speaking = false) {
+/** Playback, cloud thinking and confirmed interruption remain separate signals. */
+export function presentCall(state = {}, speaking = false, feedback = {}) {
   const active = ['starting', 'running', 'stopping'].includes(state.lifecycle);
   const busy = state.lifecycle === 'starting' || state.lifecycle === 'stopping';
   const connected =
@@ -38,9 +40,11 @@ export function presentCall(state = {}, speaking = false) {
     if (!connected) phase = 'recovering';
     else if (state.audio !== 'running') phase = 'paused';
     else if (state.speakerMuted) phase = 'quiet';
+    else if (feedback.interrupted) phase = 'interrupted';
     else if (speaking) phase = 'speaking';
     else if (state.microphoneMuted) phase = 'muted';
-    else phase = 'ready';
+    else if (feedback.thinking) phase = 'thinking';
+    else phase = 'listening';
   }
 
   return {
@@ -61,6 +65,32 @@ export function presentCall(state = {}, speaking = false) {
           : phase === 'connecting'
             ? 'Agora · 连接中'
             : 'Agora Cloud',
+  };
+}
+
+/** Keep only the latest user's cumulative ASR and the newest interrupted AI turn. */
+export function readConversation(messages, columns = 24) {
+  let text = '';
+  let interruptedKey = '';
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (!text && message.role === 'user') text = message.text.trim();
+    if (
+      !interruptedKey &&
+      message.role === 'assistant' &&
+      (message.interrupted || message.status === 'interrupted')
+    )
+      interruptedKey = message.id;
+    if (text && interruptedKey) break;
+  }
+  const characters = Array.from(text.replace(/\s+/g, ' '));
+  const limit = Math.max(8, Math.floor(columns));
+  return {
+    userLine:
+      characters.length > limit
+        ? `…${characters.slice(-(limit - 1)).join('')}`
+        : characters.join(''),
+    interruptedKey,
   };
 }
 

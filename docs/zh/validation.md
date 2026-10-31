@@ -29,6 +29,10 @@ npm pack --dry-run
 
 ## 可选的 Ink Web 检查
 
+示例在 `transcripts` Agent Worker 中加载 RTM 及其 Wasm。原生 Ink 会使用独立线程，
+音频和界面仍留在 Page。Ink Web 的 Worker realm 目前仍共享浏览器主事件循环，
+因此这次改动不代表 Web 已支持 CPU 任务离开主线程。原生与 Web 性能需要分别验证。
+
 准备 Chrome/Chromium，以及包含 WHIP 支持的 Ink Web 构建后：
 
 ```sh
@@ -68,6 +72,13 @@ Ink 和 AI 使用同一频道中的两个不同 UID。
 用户确认，轮流说话的示例不再把 AI 播放声音或回答期间的插话混入下一句识别结果。
 这里使用的是半双工收音控制，不是原生回声消除；需要等 AI 说完再讲话，
 也不保证特定的 ASR 首字时延。
+
+在 **2026-11-01**，macOS 的 release 版 `ink-open` 已通过 Agent Worker 运行 RTM，
+连接真实 Agora Cloud。一次 176 秒通话收到 305 次 ASR 更新。在包含 ASR 活动的
+30 个四秒观测窗口中，Page 动画回调约为每秒 59.7–60.0 次，最大的窗口 p95 间隔为
+20.3 ms，最大帧间隔为 34.5 ms；统计排除了启动、停止和音频暂停的窗口。
+用户确认说话和插话均流畅。额外两轮同账号连接、停止测试中，麦克风、WHIP、
+云端 AI 和 RTM 均完成清理。这些是原生端结果，不代表 Web 或 Android 的性能。
 
 ## 在目标宿主上验收
 

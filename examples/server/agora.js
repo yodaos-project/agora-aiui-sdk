@@ -12,10 +12,13 @@ export function createAgoraAgentFactory({
   pipelineId,
   area = 'AP',
   enableRtm = false,
+  enableInterruption,
   asrLanguage,
 }) {
   if (!pipelineId || !['AP', 'CN', 'US', 'EU'].includes(area))
     throw new TypeError('Set AGORA_PIPELINE_ID and a valid AGORA_AREA.');
+  if (enableInterruption !== undefined && typeof enableInterruption !== 'boolean')
+    throw new TypeError('enableInterruption must be a boolean.');
   if (
     asrLanguage !== undefined &&
     (typeof asrLanguage !== 'string' ||
@@ -90,6 +93,9 @@ export function createAgoraAgentFactory({
                 agent_rtc_uid: botUid,
                 remote_rtc_uids: [uid],
                 enable_string_uid: true,
+                ...(enableInterruption === undefined
+                  ? {}
+                  : { interruption: { enable: enableInterruption } }),
                 ...(enableRtm
                   ? { advanced_features: { enable_rtm: true }, parameters: { data_channel: 'rtm' } }
                   : {}),

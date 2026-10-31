@@ -110,7 +110,10 @@ is enough; clear any UI timers on stop/unload.
 
 ### Take turns speaking
 
-The example sets `microphoneMode: 'half-duplex'`: the AI's thinking/speaking
+The example uses `full-duplex` and enables cloud interruption. Use a host with
+working echo cancellation or headphones to speak while the AI is replying.
+Without echo cancellation, set `microphoneMode: 'half-duplex'` in the example's
+`configuration.js`. The AI's thinking/speaking
 activity and actual received audio temporarily pause microphone transmission.
 It resumes after playback becomes quiet, preserving the user's manual mute.
 The microphone button shows **等我说完** during that pause. Wait for the AI to
@@ -167,9 +170,11 @@ RTM setup defaults to a 15-second deadline; change it with
 session's overall startup deadline.
 
 Snapshots retain at most 20 messages, 2,000 characters per message and 12,000
-characters in total. Long text is truncated. The example shows newest messages
-first. Hiding text keeps the bounded live subscription so showing it again does
-not lose messages. `stop()` removes listeners and logs out the owned RTM client;
+characters in total. Long text is truncated. The example displays only the latest
+user utterance in one line, following the end of long sentences. Its orb responds
+to audio levels and cloud thinking; a confirmed interrupted AI turn briefly shows
+**已打断**. AI reply text remains available in the SDK snapshot but is not displayed.
+`stop()` removes listeners and logs out the owned RTM client;
 its cleanup report includes `transcripts` when live text was configured.
 
 The RTM constructor is injected, so the base client SDK does not load it for
