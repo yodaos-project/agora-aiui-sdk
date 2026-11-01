@@ -80,7 +80,7 @@ a session backend at runtime. Keep signing certificates off the client.
 
 The SDK receives live ASR and AI reply text through RTM. It displays partial
 results without polling history. Playback-synchronized word captions, general
-chat message sending, AI semantic events, and local tools need additional integration.
+chat message sending and AI semantic events need additional integration. [Local tools](local-tools.md) require a public HTTPS callback.
 Audio transport does not itself create a messaging channel.
 
 ## ASR text appears slowly

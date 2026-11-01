@@ -5,11 +5,16 @@ import { createSessionService } from './sessions.js';
 
 const appId = process.env.AGORA_APP_ID;
 const certificate = process.env.AGORA_APP_CERTIFICATE;
+const area = process.env.AGORA_AREA || 'AP';
+const whipBaseURL =
+  process.env.AGORA_WHIP_BASE_URL ||
+  (area === 'CN' ? undefined : 'https://ap-webrtc-whip.ap.sd-rtn.com');
+if (!whipBaseURL) throw new Error('Set AGORA_WHIP_BASE_URL to the enabled China WHIP endpoint.');
 const createAgent = createAgoraAgentFactory({
   appId,
   certificate,
   pipelineId: process.env.AGORA_PIPELINE_ID,
-  area: process.env.AGORA_AREA || 'AP',
+  area,
   enableRtm: true,
   enableInterruption: true,
   asrLanguage: process.env.AGORA_ASR_LANGUAGE || undefined,
@@ -18,7 +23,8 @@ const service = createSessionService({
   appId,
   certificate,
   createAgent,
-  baseURL: process.env.AGORA_WHIP_BASE_URL || 'https://ap-webrtc-whip.ap.sd-rtn.com',
+  baseURL: whipBaseURL,
+  toolsPublicURL: process.env.VOICE_TOOLS_PUBLIC_URL,
 });
 const server = createServer(
   createVoiceHandler({

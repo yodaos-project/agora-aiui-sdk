@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import agoraToken from 'agora-token';
 import { agoraEndpoint, isAgoraUid } from '../../src/agora.js';
 import { createWhipToken } from './token.js';
+import { toolDefinitions } from '../../src/tool-schema.js';
+import { createToolRelay, publicToolsURL } from './tools.js';
+import { ServiceError } from './errors.js';
+export { ServiceError } from './errors.js';
 
 /** Allocate distinct string accounts for the client and the cloud agent. */
 export function participantUids(id = randomUUID()) {
@@ -13,20 +17,13 @@ export function participantUids(id = randomUUID()) {
   return { uid, botUid };
 }
 
-export class ServiceError extends Error {
-  constructor(status, code) {
-    super(code);
-    this.status = status;
-    this.code = code;
-  }
-}
-
 /** Single-process reference store. Replace with durable storage and a scheduled reconciler when deploying. */
 export function createSessionService({
   appId,
   certificate,
   baseURL,
   createAgent,
+  toolsPublicURL,
   leaseMs = 90_000,
   maxDurationMs = 30 * 60_000,
   maxSessions = 20,
@@ -53,6 +50,7 @@ export function createSessionService({
     lifetime: tokenLifetime,
   });
   const records = new Map();
+  const toolsRoot = publicToolsURL(toolsPublicURL);
   let closing = false;
 
   function lookup(id, owner, open = true) {
@@ -99,6 +97,7 @@ export function createSessionService({
 
   function stopRecord(record) {
     record.closing = true;
+    record.tools?.close();
     if (record.stopped) return Promise.resolve();
     if (record.stopPromise) return record.stopPromise;
     record.stopPromise = Promise.resolve()
@@ -122,8 +121,15 @@ export function createSessionService({
   }
 
   return {
-    createSession(owner) {
+    createSession(owner, { tools = [] } = {}) {
       if (closing) throw new ServiceError(503, 'SERVER_STOPPING');
+      let definitions;
+      try {
+        definitions = toolDefinitions(tools);
+      } catch {
+        throw new ServiceError(400, 'INVALID_TOOLS');
+      }
+      if (definitions.length && !toolsRoot) throw new ServiceError(503, 'LOCAL_TOOLS_UNAVAILABLE');
       if (
         records.size >= maxSessions * 4 ||
         [...records.values()].filter((r) => !r.stopped).length >= maxSessions
@@ -143,9 +149,15 @@ export function createSessionService({
         closing: false,
         stopped: false,
       };
+      if (definitions.length)
+        record.tools = createToolRelay({
+          definitions,
+          url: `${toolsRoot}/voice/sessions/${id}/tools/invoke`,
+        });
       records.set(id, record);
       return {
         id,
+        ...(record.tools ? { tools: true } : {}),
         whip: { baseURL, channel: record.channel, uid, ...token(record) },
         rtm: {
           appId,
@@ -171,6 +183,7 @@ export function createSessionService({
             uid: record.uid,
             botUid: record.botUid,
             maxDurationSeconds: Math.ceil(maxDurationMs / 1000),
+            tools: record.tools?.cloudTools,
           });
           await record.agent.start();
         });
@@ -193,6 +206,27 @@ export function createSessionService({
         throw new ServiceError(502, 'AGENT_STOP_UNCONFIRMED');
       }
       return { stopped: true };
+    },
+
+    authorizeToolCall(id, authorization) {
+      const record = records.get(id);
+      if (!record?.tools) throw new ServiceError(404, 'SESSION_NOT_FOUND');
+      record.tools.authorize(authorization);
+      lookup(id, record.owner);
+      if (!record.startPromise) throw new ServiceError(409, 'AGENT_NOT_STARTED');
+      return record.tools;
+    },
+
+    nextToolCall(id, owner, signal) {
+      const relay = lookup(id, owner).tools;
+      if (!relay) throw new ServiceError(404, 'TOOLS_UNAVAILABLE');
+      return relay.next(signal);
+    },
+
+    submitToolResult(id, owner, result) {
+      const relay = lookup(id, owner).tools;
+      if (!relay) throw new ServiceError(404, 'TOOLS_UNAVAILABLE');
+      return relay.submit(result);
     },
 
     async getTranscripts(id, owner) {

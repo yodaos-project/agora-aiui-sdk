@@ -1,30 +1,8 @@
-const COPY = {
-  idle: { title: '准备好了', hint: '开始一段对话' },
-  connecting: { title: '正在连接', hint: '马上就好…' },
-  listening: { title: '正在聆听', hint: '说点什么，我在听' },
-  thinking: { title: '正在思考', hint: '正在想你的问题' },
-  speaking: { title: '正在说话', hint: '你可以随时插话' },
-  interrupted: { title: '已打断', hint: '我在听，你继续说' },
-  muted: { title: '麦克风已关', hint: '打开麦克风，继续聊天' },
-  quiet: { title: '声音已关', hint: '打开扬声器，听见回答' },
-  paused: { title: '播放已暂停', hint: '回到前台，继续聊天' },
-  recovering: { title: '正在重连', hint: '等待音频连接恢复…' },
-  stopping: { title: '正在结束', hint: '下次再聊' },
-  stopped: { title: '对话已结束', hint: '想说话时，我还在' },
-  failed: { title: '连接失败', hint: '检查网络和配置，再试一次' },
-};
-
-const ERRORS = {
-  MICROPHONE: '请允许使用麦克风，再试一次。',
-  AUDIO: '请回到前台，检查声音后再试。',
-  UNSUPPORTED: '当前宿主尚未提供所需的语音能力。',
-  BACKEND: '暂时联系不上服务，请稍后重试。',
-  AGENT: '语音伙伴暂时没接通，请稍后重试。',
-  LEASE: '会话已中断，可以重新开始聊天。',
-};
+import { getCallCopy } from './copy.js';
 
 /** Playback, cloud thinking and confirmed interruption remain separate signals. */
-export function presentCall(state = {}, speaking = false, feedback = {}) {
+export function presentCall(state = {}, speaking = false, feedback = {}, provider = 'agora') {
+  const copy = getCallCopy(provider);
   const active = ['starting', 'running', 'stopping'].includes(state.lifecycle);
   const busy = state.lifecycle === 'starting' || state.lifecycle === 'stopping';
   const connected =
@@ -47,24 +25,34 @@ export function presentCall(state = {}, speaking = false, feedback = {}) {
     else phase = 'listening';
   }
 
+  const canControl = state.lifecycle === 'running' && connected;
+  const orbAction = !active
+    ? 'start'
+    : phase === 'paused'
+      ? 'resume'
+      : canControl && state.speakerMuted
+        ? 'soundOn'
+        : canControl && !state.microphoneSuppressed
+          ? state.microphoneMuted
+            ? 'unmute'
+            : 'mute'
+          : '';
+
   return {
-    ...COPY[phase],
-    hint: phase === 'failed' ? (ERRORS[state.error?.code] ?? COPY.failed.hint) : COPY[phase].hint,
+    ...copy.phases[phase],
+    hint:
+      phase === 'failed'
+        ? (copy.errors[state.error?.code] ?? copy.phases.failed.hint)
+        : copy.phases[phase].hint,
     phase,
     active,
     busy,
     connected,
-    canControl: state.lifecycle === 'running' && connected,
+    canControl,
+    orbAction,
+    orbLabel: orbAction ? copy[orbAction] : copy.phases[phase].title,
     canResume: phase === 'paused',
-    cloud: state.error
-      ? 'Agora · 未连接'
-      : connected
-        ? 'Agora · 已连接'
-        : phase === 'recovering'
-          ? 'Agora · 等待恢复'
-          : phase === 'connecting'
-            ? 'Agora · 连接中'
-            : 'Agora Cloud',
+    cloud: copy.cloud,
   };
 }
 
@@ -94,11 +82,25 @@ export function readConversation(messages, columns = 24) {
   };
 }
 
-/** Keep the page update small: unchanged text and audio bars need no new binding work. */
+/** Keep the page update small: unchanged text and audio feedback need no new binding work. */
 export function changedFields(current, next) {
   const changed = {};
   for (const key of Object.keys(next)) {
     if (current[key] !== next[key]) changed[key] = next[key];
   }
   return changed;
+}
+
+/** Smooth each direction separately so speaking over the AI still lights the input glow. */
+export function audioFeedback(state, levels, previous = { input: 0, output: 0 }, elapsed = 160) {
+  const running =
+    state.lifecycle === 'running' && state.media === 'connected' && state.audio === 'running';
+  const energy = (level) =>
+    Number.isFinite(level) ? Math.max(0, Math.min(1, (level + 52) / 28)) : 0;
+  const input =
+    running && !state.microphoneMuted && !state.microphoneSuppressed ? energy(levels.local) : 0;
+  const output = running && !state.speakerMuted ? energy(levels.remote) : 0;
+  const smooth = (value, target) =>
+    value + (target - value) * (1 - Math.exp(-Math.max(0, elapsed) / (target > value ? 180 : 550)));
+  return { input: smooth(previous.input, input), output: smooth(previous.output, output) };
 }

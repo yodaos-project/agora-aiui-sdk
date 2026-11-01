@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
+import { spawnSync } from 'node:child_process';
 import accessToken from 'agora-token/src/AccessToken2.js';
 import { createSessionService, participantUids } from '../examples/server/sessions.js';
 import { createVoiceHandler, bearerAuthorizer } from '../examples/server/http.js';
@@ -204,7 +205,7 @@ test('actual HTTP adapter and handler perform a managed SDK call without exposin
   assert(!JSON.stringify(voice.getState()).includes(credentials.certificate));
 });
 
-test('business API requires authentication, checks CORS and rejects payloads', async (t) => {
+test('business API requires authentication, checks CORS and rejects untyped payloads', async (t) => {
   const { store } = service();
   const baseURL = await listen(
     t,
@@ -223,7 +224,7 @@ test('business API requires authentication, checks CORS and rejects payloads', a
   assert.equal(response.status, 201);
   assert.equal(response.headers.get('access-control-allow-origin'), headers.Origin);
   assert(!JSON.stringify(await response.json()).includes(credentials.certificate));
-  assert.equal((await fetch(route, { method: 'POST', headers, body: '{}' })).status, 413);
+  assert.equal((await fetch(route, { method: 'POST', headers, body: '{}' })).status, 415);
   assert.equal(
     (await fetch(route, { method: 'OPTIONS', headers: { Origin: headers.Origin } })).status,
     204,
@@ -366,11 +367,129 @@ test('official Agora server SDK preserves string accounts in join, auth and RTC 
     assert.equal(parsed.getServices(1)[0].__channel_name.toString(), 'test-channel');
     assert.equal(parsed.getServices(1)[0].__uid.toString(), 'agent-test');
     assert.equal(parsed.getServices(2)[0].__user_id.toString(), 'agent-test');
+    assert.equal(parsed.getServices(9).length, 1);
   }
   assert.match(requests[1].path, /\/agents\/test-cloud-agent\/history$/);
   assert.equal(requests[1].method, 'GET');
   assert.match(requests[2].path, /\/agents\/test-cloud-agent\/leave$/);
   assert.equal(requests[3].path, requests[2].path);
+});
+
+test('China service uses the CN API path and a ConvoAI token with string accounts', async (t) => {
+  const requests = [];
+  const origin = await listen(t, async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    requests.push({
+      path: request.url,
+      authorization: request.headers.authorization,
+      body: body ? JSON.parse(body) : null,
+    });
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify(request.url.endsWith('/join') ? { agent_id: 'cn-agent' } : {}));
+  });
+  const previous = process.env.AGORA_AGENTS_API_BASE_URL;
+  process.env.AGORA_AGENTS_API_BASE_URL = origin;
+  t.after(() => {
+    if (previous === undefined) delete process.env.AGORA_AGENTS_API_BASE_URL;
+    else process.env.AGORA_AGENTS_API_BASE_URL = previous;
+  });
+  const factory = createAgoraAgentFactory({
+    ...credentials,
+    pipelineId: 'cn-pipeline',
+    area: 'CN',
+    enableRtm: true,
+  });
+  const bot = factory({
+    sessionId: 'cn-test',
+    channel: 'cn-channel',
+    uid: 'aiui-client',
+    botUid: 'aiui-agent',
+    maxDurationSeconds: 600,
+  });
+  await bot.start();
+  await bot.stop();
+  assert.equal(requests.length, 2);
+  assert.equal(
+    requests[0].path,
+    `/cn/api/conversational-ai-agent/v2/projects/${credentials.appId}/join`,
+  );
+  assert.match(
+    requests[1].path,
+    /\/cn\/api\/conversational-ai-agent\/v2\/projects\/.*\/agents\/cn-agent\/leave$/,
+  );
+  assert.equal(requests[0].body.pipeline_id, 'cn-pipeline');
+  assert.equal(requests[0].body.properties.enable_string_uid, true);
+  assert.equal(requests[0].body.properties.agent_rtc_uid, 'aiui-agent');
+  assert.deepEqual(requests[0].body.properties.remote_rtc_uids, ['aiui-client']);
+  for (const encoded of [
+    requests[0].body.properties.token,
+    ...requests.map((request) => request.authorization.slice('agora token='.length)),
+  ]) {
+    const parsed = new accessToken.AccessToken2();
+    assert.equal(parsed.from_string(encoded), true);
+    assert.equal(parsed.getServices(9).length, 1);
+    assert.equal(parsed.getServices(1)[0].__channel_name.toString(), 'cn-channel');
+    assert.equal(parsed.getServices(1)[0].__uid.toString(), 'aiui-agent');
+    assert.equal(parsed.getServices(2)[0].__user_id.toString(), 'aiui-agent');
+  }
+});
+
+test('the China reference server requires an explicitly enabled WHIP origin', () => {
+  const result = spawnSync(process.execPath, ['examples/server/main.js'], {
+    cwd: new URL('../', import.meta.url),
+    env: { ...process.env, AGORA_AREA: 'CN', AGORA_WHIP_BASE_URL: '' },
+    encoding: 'utf8',
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Set AGORA_WHIP_BASE_URL/);
+});
+
+test('managed voice calls route through the China backend with matching identities', async (t) => {
+  const requests = [];
+  const upstream = await listen(t, async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    requests.push({ path: request.url, body: body ? JSON.parse(body) : null });
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify(request.url.endsWith('/join') ? { agent_id: 'cn-agent' } : {}));
+  });
+  const previous = process.env.AGORA_AGENTS_API_BASE_URL;
+  process.env.AGORA_AGENTS_API_BASE_URL = upstream;
+  t.after(() => {
+    if (previous === undefined) delete process.env.AGORA_AGENTS_API_BASE_URL;
+    else process.env.AGORA_AGENTS_API_BASE_URL = previous;
+  });
+  const createAgent = createAgoraAgentFactory({
+    ...credentials,
+    area: 'CN',
+    pipelineId: 'cn-pipeline',
+    enableRtm: true,
+  });
+  const store = createSessionService({ ...defaults, createAgent });
+  t.after(() => store.close());
+  const baseURL = await listen(
+    t,
+    createVoiceHandler({ service: store, authorize: bearerAuthorizer(demoToken) }),
+  );
+  const runtime = fakeRuntime(t);
+  const backend = createHttpVoiceBackend({ baseURL, authorization: `Bearer ${demoToken}` });
+  const voice = createAgoraVoiceSession({ backend });
+  t.after(() => voice.stop());
+  await voice.start();
+  const endpoint = new URL(runtime.whips[0].endpoint);
+  const payload = requests[0].body;
+  assert.match(requests[0].path, /^\/cn\/api\/conversational-ai-agent\/v2\/projects\/.*\/join$/);
+  assert.equal(payload.pipeline_id, 'cn-pipeline');
+  assert.equal(
+    payload.properties.channel,
+    decodeURIComponent(endpoint.pathname.slice('/pub/'.length)),
+  );
+  assert.deepEqual(payload.properties.remote_rtc_uids, [endpoint.searchParams.get('stringuid')]);
+  assert.notEqual(payload.properties.agent_rtc_uid, endpoint.searchParams.get('stringuid'));
+  assert.equal(payload.properties.enable_string_uid, true);
+  await voice.stop();
+  assert.match(requests[1].path, /\/agents\/cn-agent\/leave$/);
 });
 
 test('RTM credentials match the reservation and refresh only for its owner while active', async (t) => {

@@ -12,19 +12,30 @@
 示例需要 Node.js 22+。复制 `examples/server/.env.example` 为
 `examples/server/.env`，填好配置。在仓库根目录执行 `npm ci` 后，运行 `npm run example:server`。
 
-| 环境变量                | 填什么                                                                    |
-| ----------------------- | ------------------------------------------------------------------------- |
-| `AGORA_APP_ID`          | Agora 项目的 App ID。                                                     |
-| `AGORA_APP_CERTIFICATE` | 同一项目的签名证书，只放服务端。                                          |
-| `AGORA_PIPELINE_ID`     | 已发布的 Agent Studio 配置中的 `pipeline_id`。                            |
-| `AGORA_AREA`            | 云端 API 区域：`AP`、`CN`、`US` 或 `EU`，默认 `AP`。                      |
-| `AGORA_WHIP_BASE_URL`   | 已开通的双向 WHIP 地址，默认 `https://ap-webrtc-whip.ap.sd-rtn.com`。     |
-| `BACKEND_API_TOKEN`     | 私下测试用的随机口令，至少 24 个字符，不含空白。                          |
-| `ALLOWED_ORIGINS`       | 允许访问后端的 Web 宿主来源，以逗号分隔，例如 `https://app.example.com`。 |
-| `HOST` / `PORT`         | 监听地址，默认 `127.0.0.1` / `8787`。                                     |
+| 环境变量                    | 填什么                                                                                   |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| `AGORA_APP_ID`              | Agora 项目的 App ID。                                                                    |
+| `AGORA_APP_CERTIFICATE`     | 同一项目的签名证书，只放服务端。                                                         |
+| `AGORA_PIPELINE_ID`         | 已发布的 Agent Studio 配置中的 `pipeline_id`。                                           |
+| `AGORA_AREA`                | 云端 API 区域：`AP`、`CN`、`US` 或 `EU`，默认 `AP`。                                     |
+| `AGORA_WHIP_BASE_URL`       | 已开通的双向 WHIP 地址；`CN` 必填，其他区域默认 `https://ap-webrtc-whip.ap.sd-rtn.com`。 |
+| `AGORA_AGENTS_API_BASE_URL` | 可选的对话式 AI API origin；服务端 SDK 自动附加区域路径。                                |
+| `BACKEND_API_TOKEN`         | 私下测试用的随机口令，至少 24 个字符，不含空白。                                         |
+| `ALLOWED_ORIGINS`           | 允许访问后端的 Web 宿主来源，以逗号分隔，例如 `https://app.example.com`。                |
+| `HOST` / `PORT`             | 监听地址，默认 `127.0.0.1` / `8787`。                                                    |
 
 获取 `pipeline_id`：发布助手后，打开 **Agents → Action → Embed Agent**，复制代码中的 ID。
 持续通话时，不要重复使用示例代码里的临时 token，见 [Agora 嵌入指南](https://docs.agora.io/en/ai/studio/deploy/connect-agent)。
+
+使用声网项目时，填写同一项目的 App ID、Certificate、已发布的 Pipeline ID，
+设置 `AGORA_AREA=CN`，并填写声网为该项目开通的双向 WHIP 地址。
+如果使用声网控制台示例中的 API 地址，可设置
+`AGORA_AGENTS_API_BASE_URL=https://api.sd-rtn.com`；只填 origin，不要附加
+`/cn/api/...`，服务端 SDK 会自动补全中国区路径。这个配置不会限制 RTM 的连接区域，
+RTM 仍使用 SDK 默认的全球区域。
+
+如需单独保存本地声网配置，把 `.env.example` 复制为 `.env.shengwang`，
+填写后运行 `npm run example:server:cn`。
 
 Pipeline 提供语音识别、模型和声音配置。
 示例会在启动 AI 时开启语音打断。客户端需要有效回声消除或使用耳机，否则请使用半双工模式。
@@ -72,7 +83,7 @@ CORS 决定浏览器能否跨域访问，Authorization 仍负责验证每次会�
 使用 Certificate 的原始文本做 HS256 签名，不要先将它按十六进制解码。
 SDK 构建的双向 URL 不包含数字 `Uid` 参数。
 
-参考后端用 `agora-token` 的 `RtcTokenBuilder.buildTokenWithRtm` 为 AI 的准确字符串账号生成凭证，
+参考后端用 `agora-token` 的 `ConvoAITokenBuilder.buildToken` 为 AI 的准确字符串账号生成包含 ConvoAI、RTC 和 RTM 服务的凭证，
 再显式传给 `agora-agents@2.12.0`。这个版本的 `AgentSession` 自动生成凭证流程要求数字 UID，
 因此不能直接替换。停止和清理查询也会使用新凭证。
 请同步更新客户端和后端：旧的纯数字客户端无法读取字符串账号的会话结果。
@@ -99,7 +110,8 @@ App Certificate 和模型 API Key 保留在服务端。
 
 ## HTTP 接口
 
-所有操作都是已认证、**不带请求体的 POST 请求**，返回 JSON。
+所有操作都是已认证的 **POST 请求**，返回 JSON。音频和文字接口不带请求体；
+可选的本地工具使用 JSON 请求体，见[本地工具](local-tools.md)。
 独立示例的路径从 `/voice/sessions` 开始。
 如果通过代理添加路径前缀，客户端 `baseURL` 也可以包含这个前缀。
 
@@ -209,3 +221,18 @@ AIUI Agent 示例通过 RTM 接收实时文字，不调用这个接口。
 Token 过期和 AI 的 60 秒空闲超时，不能代替后端清理，也不能保证最长通话时间。
 
 继续阅读：[客户端 API](api.md) · [常见问题](troubleshooting.md)
+
+## 本地工具传递
+
+将 `VOICE_TOOLS_PUBLIC_URL` 设为当前后端的公网 HTTPS 根地址。
+客户端预留会话时增加 `tools` 数组，每项包含 `name`、`description` 和 `parameters`。
+后端必须在会话响应中返回 `tools: true`，否则 SDK 不会启用工具。
+
+| 路径                               | 请求和响应                                                                                                                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `/voice/sessions/:id/tools/next`   | 使用会话所有者的认证，不带请求体，最多等待十秒。返回 `{ "call": null }` 或包含 `id`、`name`、`arguments`、`expiresAt` 的调用对象。 |
+| `/voice/sessions/:id/tools/result` | 使用所有者认证，提交 `id`、`ok` 和 `result`；失败时提交 `error`。响应为 `{ "accepted": true }`。                                   |
+| `/voice/sessions/:id/tools/invoke` | 仅供 Agora 回调，使用后端生成的会话专属凭证。提交 `id`、`name` 和 `arguments`，等待本地结果。                                      |
+
+JSON 请求需带 `Content-Type: application/json`。后端在接收过程中限制请求体不超过
+64 KiB，工具调用和结果另有 8 KiB 上限。回调地址和凭证由后端生成，客户端工具定义不能指定。

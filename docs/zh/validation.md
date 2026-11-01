@@ -48,6 +48,8 @@ INK_WEB_DIST=/absolute/path/to/ink/packages/ink-web/dist npm run test:ink
 
 ## 真实云端验证
 
+2026-11-01 使用声网中国 pipeline 和原生 ink-open 人工测试了语音触发本地工具：用户确认改色和挂断成功，工具结果成功回传，云端停止接口返回 HTTP 200。这是一次特定环境的验证，不代表所有部署均已验证。
+
 截至 **2026-10-29**，已测试的云端语音路径统一使用字符串账号。
 Ink 和 AI 使用同一频道中的两个不同 UID。
 

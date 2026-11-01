@@ -3,7 +3,7 @@ import agoraToken from 'agora-token';
 import { isAgoraUid } from '../../src/agora.js';
 import { historySnapshot } from '../../src/transcripts.js';
 
-const { RtcTokenBuilder, RtcRole } = agoraToken;
+const { ConvoAITokenBuilder } = agoraToken;
 
 /** Configure the official server SDK. A saved AI Studio pipeline supplies ASR/LLM/TTS. */
 export function createAgoraAgentFactory({
@@ -34,7 +34,7 @@ export function createAgoraAgentFactory({
     timeoutInSeconds: 15,
     maxRetries: 0,
   });
-  return ({ sessionId, channel, uid, botUid, maxDurationSeconds }) => {
+  return ({ sessionId, channel, uid, botUid, maxDurationSeconds, tools = [] }) => {
     if (
       typeof uid !== 'string' ||
       typeof botUid !== 'string' ||
@@ -51,12 +51,11 @@ export function createAgoraAgentFactory({
     // AgentSession 2.12 auto-token generation parses agentUid as an integer.
     // The generated REST client accepts an explicit account token without that conversion.
     const token = () => {
-      const value = RtcTokenBuilder.buildTokenWithRtm(
+      const value = ConvoAITokenBuilder.buildToken(
         appId,
         certificate,
         channel,
         botUid,
-        RtcRole.PUBLISHER,
         lifetime,
         lifetime,
       );
@@ -96,9 +95,16 @@ export function createAgoraAgentFactory({
                 ...(enableInterruption === undefined
                   ? {}
                   : { interruption: { enable: enableInterruption } }),
-                ...(enableRtm
-                  ? { advanced_features: { enable_rtm: true }, parameters: { data_channel: 'rtm' } }
+                ...(enableRtm || tools.length
+                  ? {
+                      advanced_features: {
+                        ...(enableRtm ? { enable_rtm: true } : {}),
+                        ...(tools.length ? { enable_tools: true } : {}),
+                      },
+                    }
                   : {}),
+                ...(enableRtm ? { parameters: { data_channel: 'rtm' } } : {}),
+                ...(tools.length ? { llm: { tools } } : {}),
                 ...(asrLanguage ? { asr: { language: asrLanguage } } : {}),
                 idle_timeout: 60,
               },

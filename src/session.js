@@ -1,5 +1,6 @@
 import { agoraEndpoint, whipOptions } from './agora.js';
 import { transcriptSnapshot } from './transcripts.js';
+import { connectLocalTools, localTools } from './local-tools.js';
 import {
   AgoraVoiceError,
   acquire,
@@ -45,12 +46,22 @@ export class AgoraVoiceSession extends EventTarget {
       throw new TypeError('transcripts must implement connect.');
     if (options.transcripts && !options.backend)
       throw new TypeError('Live transcripts require a managed backend reservation.');
+    this._tools = localTools(options.tools);
+    if (
+      this._tools.definitions.length &&
+      (!options.backend ||
+        ['nextToolCall', 'submitToolResult'].some(
+          (key) => typeof options.backend[key] !== 'function',
+        ))
+    )
+      throw new TypeError('Local tools require a backend with nextToolCall and submitToolResult.');
     if (
       options.microphoneMode !== undefined &&
       !['full-duplex', 'half-duplex'].includes(options.microphoneMode)
     )
       throw new TypeError('microphoneMode must be full-duplex or half-duplex.');
     this._options = { ...options };
+    delete this._options.tools;
     this._timeout = positiveMilliseconds(options.timeout, 15_000, 'timeout');
     this._cleanupTimeout = positiveMilliseconds(options.cleanupTimeout, 5_000, 'cleanupTimeout');
     this._controller = new AbortController();
@@ -75,6 +86,7 @@ export class AgoraVoiceSession extends EventTarget {
     this._cleanupReport = null;
     this._transcriptMessages = Object.freeze([]);
     this._transcriptState = Object.freeze({ status: 'disabled', error: null });
+    this._toolState = 'disabled';
   }
 
   /** A sanitized snapshot: signaling, transport and cloud agent states are separate. */
@@ -146,7 +158,10 @@ export class AgoraVoiceSession extends EventTarget {
       if (this._options.backend) {
         const backend = this._options.backend;
         await acquire(
-          backend.createSession({ signal }),
+          backend.createSession({
+            signal,
+            ...(this._tools.definitions.length ? { tools: this._tools.definitions } : {}),
+          }),
           signal,
           (reservation) => {
             this._reservation = reservation;
@@ -222,6 +237,18 @@ export class AgoraVoiceSession extends EventTarget {
         // Subscribe before starting the cloud AI so its first words are not missed.
         await this._connectTranscripts();
         checkSignal(signal);
+        if (this._tools.definitions.length) {
+          if (this._reservation.tools !== true)
+            throw new AgoraVoiceError('TOOLS', 'The backend did not enable local tools.');
+          this._toolSource = connectLocalTools({
+            registry: this._tools,
+            backend: this._options.backend,
+            sessionId: this._reservation.id,
+            signal,
+            endConversation: () => this.stop(),
+            onState: (state) => this._setToolState(state),
+          });
+        }
         step = 'AGENT';
         this._agent = 'starting';
         this._notify();
@@ -510,6 +537,17 @@ export class AgoraVoiceSession extends EventTarget {
     return this._transcriptState;
   }
 
+  /** Observe tool transport independently from voice and transcript availability. */
+  getToolState() {
+    return this._toolState;
+  }
+
+  _setToolState(state) {
+    if (state === this._toolState) return;
+    this._toolState = state;
+    this.dispatchEvent(new Event('toolstatechange'));
+  }
+
   _setTranscriptState({ status, error = null }) {
     if (
       this._transcriptState.status === status &&
@@ -586,6 +624,7 @@ export class AgoraVoiceSession extends EventTarget {
     const pending = deferred();
     this._stopPromise = pending.promise;
     this._controller.abort();
+    this._tools.handlers.clear();
     if (this._options.transcripts) this._setTranscriptState({ status: 'closed' });
     if (this._renewTimer != null) clearTimeout(this._renewTimer);
     if (this._trackTimer != null) clearInterval(this._trackTimer);
@@ -613,6 +652,8 @@ export class AgoraVoiceSession extends EventTarget {
     const audio = this._audio;
     const reservation = this._reservation;
     const transcriptSource = this._transcriptSource;
+    const toolSource = this._toolSource;
+    this._toolSource = null;
     this._transcriptSource = null;
     this._whip = null;
     this._reservation = null;
@@ -629,12 +670,14 @@ export class AgoraVoiceSession extends EventTarget {
       transcriptSource
         ? bounded(() => transcriptSource.close(), this._cleanupTimeout)
         : 'not-needed',
-    ]).then(([media, audioResult, backend, transcripts]) => {
+      toolSource ? bounded(() => toolSource.close(), this._cleanupTimeout) : 'not-needed',
+    ]).then(([media, audioResult, backend, transcripts, tools]) => {
       this._cleanupReport = Object.freeze({
         media,
         audio: audioResult,
         backend,
         ...(this._options.transcripts ? { transcripts } : {}),
+        ...(this._tools.definitions.length ? { tools } : {}),
       });
       if (this._options.backend)
         this._agent = backend === 'complete' || backend === 'not-needed' ? 'stopped' : 'unknown';

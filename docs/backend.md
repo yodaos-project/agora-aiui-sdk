@@ -15,20 +15,30 @@ The example requires Node.js 22+. Copy `examples/server/.env.example` to
 `examples/server/.env`, fill in your values, then run `npm run example:server`
 from the repository root after `npm ci`.
 
-| Variable                | What to enter                                                                     |
-| ----------------------- | --------------------------------------------------------------------------------- |
-| `AGORA_APP_ID`          | Your Agora project's App ID.                                                      |
-| `AGORA_APP_CERTIFICATE` | The same project's signing certificate. Keep it on the server.                    |
-| `AGORA_PIPELINE_ID`     | Your published Agent Studio configuration's `pipeline_id`.                        |
-| `AGORA_AREA`            | Cloud API area: `AP`, `CN`, `US`, or `EU`. Default: `AP`.                         |
-| `AGORA_WHIP_BASE_URL`   | Your enabled duplex WHIP origin. Default: `https://ap-webrtc-whip.ap.sd-rtn.com`. |
-| `BACKEND_API_TOKEN`     | A random private-demo token of at least 24 characters, without whitespace.        |
-| `ALLOWED_ORIGINS`       | Comma-separated Web host origins, such as `https://app.example.com`.              |
-| `HOST` / `PORT`         | Listen address. Defaults: `127.0.0.1` / `8787`.                                   |
+| Variable                    | What to enter                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `AGORA_APP_ID`              | Your Agora project's App ID.                                                                                  |
+| `AGORA_APP_CERTIFICATE`     | The same project's signing certificate. Keep it on the server.                                                |
+| `AGORA_PIPELINE_ID`         | Your published Agent Studio configuration's `pipeline_id`.                                                    |
+| `AGORA_AREA`                | Cloud API area: `AP`, `CN`, `US`, or `EU`. Default: `AP`.                                                     |
+| `AGORA_WHIP_BASE_URL`       | Enabled duplex WHIP origin; required for `CN`. Other areas default to `https://ap-webrtc-whip.ap.sd-rtn.com`. |
+| `AGORA_AGENTS_API_BASE_URL` | Optional ConvoAI API origin. The server SDK appends the area-specific API path.                               |
+| `BACKEND_API_TOKEN`         | A random private-demo token of at least 24 characters, without whitespace.                                    |
+| `ALLOWED_ORIGINS`           | Comma-separated Web host origins, such as `https://app.example.com`.                                          |
+| `HOST` / `PORT`             | Listen address. Defaults: `127.0.0.1` / `8787`.                                                               |
 
 To find `pipeline_id`, publish your agent, then open **Agents → Action → Embed Agent**.
 Copy the ID from the generated code; do not reuse the snippet's temporary tokens
 for ongoing calls. See [Agora's embed guide](https://docs.agora.io/en/ai/studio/deploy/connect-agent).
+
+For a Shengwang project, use its App ID, certificate and published pipeline,
+set `AGORA_AREA=CN`, and supply the duplex WHIP origin enabled for that project.
+To use the API origin shown in the Shengwang console, set
+`AGORA_AGENTS_API_BASE_URL=https://api.sd-rtn.com` (origin only, without the
+`/cn/api/...` path). The server SDK appends the CN path. These settings do not
+restrict the RTM SDK's connection region; it uses its default global area.
+For a separate local configuration, copy `.env.example` to `.env.shengwang`
+and run `npm run example:server:cn`.
 
 The pipeline supplies the speech recognition, language model, and voice settings.
 The example enables voice interruption when starting the AI. Pair it with
@@ -84,8 +94,8 @@ It omits `uid`; the AIUI Agent's account travels in the URL's `stringuid` parame
 Sign HS256 with the certificate's text value, not hex-decoded bytes.
 The SDK constructs the duplex URL without a numeric `Uid` parameter.
 
-The reference server uses `RtcTokenBuilder.buildTokenWithRtm` from `agora-token`
-for the AI's exact string account. It passes explicit account tokens to
+The reference server uses `ConvoAITokenBuilder.buildToken` from `agora-token`
+for the AI's exact string account, including ConvoAI, RTC and RTM services. It passes explicit account tokens to
 `agora-agents@2.12.0`; that version's automatic `AgentSession` token generation
 expects numeric UIDs. Stop and reconciliation requests obtain fresh tokens too.
 Update the client and backend together: older numeric-only clients cannot read
@@ -115,7 +125,9 @@ to the client.
 
 ## HTTP contract
 
-All operations use authenticated **POST requests without a body** and return JSON.
+All operations use authenticated **POST requests** and return JSON. Audio and
+transcript operations have no body. Optional local tools use JSON payloads as
+described in [Local tools](local-tools.md).
 The standalone example serves `/voice/sessions`. A proxy prefix can be included
 in the client's `baseURL` if your proxy routes that prefix.
 
@@ -237,3 +249,22 @@ being confirmed. Token expiry and the AI's 60-second idle timeout are not
 substitutes for backend cleanup or a guaranteed maximum call duration.
 
 Next: [client API](api.md) · [troubleshooting](troubleshooting.md)
+
+## Local tool delivery
+
+Set `VOICE_TOOLS_PUBLIC_URL` to this backend's public HTTPS base URL. Client tool
+registration adds `{ "tools": [{ "name", "description", "parameters" }] }` to the
+session reservation request (use actual values, not this abbreviated shape).
+The reservation must return `tools: true`. The SDK will refuse to enable tools if
+that acknowledgement is missing.
+
+| Route                              | Request / response                                                                                                                                              |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/voice/sessions/:id/tools/next`   | Bodyless, owner-authenticated; waits up to ten seconds, returns `{ "call": null }` or `{ "call": { "id", "name", "arguments", "expiresAt" } }`.                 |
+| `/voice/sessions/:id/tools/result` | Owner-authenticated; accepts `{ "id", "ok": true, "result" }` or `{ "id", "ok": false, "error" }`; returns `{ "accepted": true }`.                              |
+| `/voice/sessions/:id/tools/invoke` | Agora callback only; requires the session-specific credential generated by the server, accepts `{ "id", "name", "arguments" }`, and waits for the local result. |
+
+The field-only objects in this table describe shapes. Send valid JSON with actual
+values and `Content-Type: application/json`. Bodies are capped at 64 KiB while
+receiving; tool calls/results have a tighter 8 KiB cap. Callback URLs and credentials
+come from trusted server configuration, never from the client's tool declaration.

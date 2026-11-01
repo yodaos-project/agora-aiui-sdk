@@ -18,8 +18,8 @@ Voice Agent 是一个可以用语音交流的 AI 助手。你提出问题，它�
 互动讲解和操作指导等场景。
 
 **Agora AIUI SDK** 为运行在 [Ink](https://github.com/jsar-project/ink) 上的 AIUI Agent
-接入这些能力。AIUI Agent 负责采集声音、播放回答，Agora Cloud 负责语音识别、
-大模型推理和语音合成。你可以在 Agora Agent Studio 中配置助手的角色、语言和声音。
+接入这些能力。AIUI Agent 负责采集声音、播放回答，声网 / Agora Cloud 负责语音识别、
+大模型推理和语音合成。你可以在 AI Studio 中配置助手的角色、语言和声音。
 
 ## 可以用来做什么？
 
@@ -32,13 +32,16 @@ Voice Agent 是一个可以用语音交流的 AI 助手。你提出问题，它�
 
 ## 从一个语音伙伴开始
 
-项目附带名为「**小语**」的语音示例，界面适合眼镜尺寸，支持彩色和单绿主题。
+项目附带适合眼镜尺寸的语音示例，支持彩色和单绿主题。示例配置中选择
+`agora`，显示英文界面和 **Agora Cloud**；选择 `shengwang`，显示中文「**小语**」
+界面和 **声网 Cloud**。
 你可以直接体验，也可以改造成自己的 AIUI Agent。
 
 - **自然对话**：双向语音，支持麦克风和扬声器控制。
 - **随时插话**：宿主具备回声消除或使用耳机时，可以在 AI 回答中打断。
 - **看见识别结果**：你最新说的话在一行中实时更新。
 - **感知对话状态**：动态语音球呈现聆听、思考、说话和确认打断的状态。
+- **让 AI 执行动作**：[在 AIUI Agent 中定义本地工具](docs/zh/local-tools.md)，用于改变界面或结束通话，执行函数留在本地。
 - **保持界面流畅**：原生 Ink 将实时文字处理放在 Agent Worker 中，与页面动画和音频分开运行。
 
 SDK 还提供 AI 回复文字、音频电平、连接状态和音量控制，方便你设计自己的界面。
@@ -52,8 +55,8 @@ SDK 还提供 AI 回复文字、音频电平、连接状态和音量控制，方
 你需要准备：
 
 - Node.js 22+，以及支持麦克风、WHIP 和 Worker 联网的新版 Ink 宿主。
-- 已开通双向 WHIP 和 Signaling（RTM）的 Agora 项目。
-- 在 Agora Agent Studio 中发布的语音助手，以及它的 `pipelineId`。
+- 已开通双向 WHIP 和 Signaling（RTM）的声网中国或 Agora 国际站项目。
+- 在 AI Studio 中发布的语音助手，以及它的 `pipelineId`。
 
 ```sh
 git clone https://github.com/yodaos-project/agora-aiui-sdk.git
@@ -62,13 +65,14 @@ npm ci
 npm run example:prepare
 ```
 
-按照 **[入门指南](docs/zh/getting-started.md)** 获取 Agora 配置、设置参考后端，
+从注册账号开始，按照 **[完整入门指南](docs/zh/getting-started.md)** 创建项目、开通服务、发布智能体并配置参考后端，
 再为 AIUI Agent 填写后端地址和登录凭证。
 
 配置完成后，在一个终端启动后端：
 
 ```sh
-npm run example:server
+npm run example:server          # Agora 国际站
+# 或：npm run example:server:cn # 声网中国
 ```
 
 在另一个终端打开示例：
@@ -77,9 +81,9 @@ npm run example:server
 ink-open examples/agent --networking-transport native --permission-checks --theme yodaos-sprite-color
 ```
 
-点击「**开始聊天**」，允许使用麦克风，再问一个问题。也可以在较长的回答中尝试插话。
+点击 **Let’s talk**（声网版为「**开始聊天**」），允许使用麦克风，再问一个问题。也可以在较长的回答中尝试插话。
 结束时点击「**结束**」。通话期间保持 AIUI Agent 在前台；切换窗口后如果播放暂停，
-点击「**继续聊天**」。
+点击 **Resume**（声网版为「**继续聊天**」）。
 
 ## 接入自己的 AIUI Agent
 
@@ -114,13 +118,13 @@ await voice.stop();
 
 ## 它们如何协作？
 
-| 组成部分     | 负责什么                          |
-| ------------ | --------------------------------- |
-| AIUI Agent   | 采集声音、播放回答、呈现对话。    |
-| 你的会话后端 | 签发临时凭证，启动和停止云端 AI。 |
-| Agora Cloud  | 传输音频，运行你配置的语音助手。  |
+| 组成部分           | 负责什么                          |
+| ------------------ | --------------------------------- |
+| AIUI Agent         | 采集声音、播放回答、呈现对话。    |
+| 你的会话后端       | 签发临时凭证，启动和停止云端 AI。 |
+| 声网 / Agora Cloud | 传输音频，运行你配置的语音助手。  |
 
-音频直接在 Ink 和 Agora Cloud 之间传输，会话后端负责连接准备和结束清理。
+音频直接在 Ink 和对应云服务之间传输，会话后端负责连接准备和结束清理。
 你可以使用项目中的 Node.js 参考后端，也可以接入已有服务；如果系统已经管理云端 AI，
 还可以[使用已有临时凭证](docs/zh/integration.md#使用已有临时凭证)。
 
@@ -129,13 +133,13 @@ await voice.stop();
 
 ## 兼容性与验证
 
-macOS 示例已经连接真实 Agora，验证语音、实时 ASR、插话和连续连接、结束。
+macOS 示例已连接真实 Agora 和声网中国，验证语音对话；声网测试还验证了语音改色和挂断。
 用户确认说话和插话均流畅；性能数据和各宿主的验证范围见[验证记录](docs/zh/validation.md#真实云端验证)。
 
 原生 Ink 会用独立线程运行 RTM Worker。Ink Web 的 Worker realm 目前仍共享浏览器主事件循环，
 Web 性能需要单独验证。没有回声消除的宿主请使用耳机，或改用[轮流说话模式](docs/zh/api.md#轮流说话)。
 
-当前版本专注于前台语音对话。自动重连、后台通话、通用聊天消息、本地工具调用，
+当前版本专注于前台语音对话。自动重连、后台通话、通用聊天消息，
 以及与播放逐字同步的字幕，暂不在当前 API 范围内。
 
 ## 文档导航
@@ -144,7 +148,7 @@ Web 性能需要单独验证。没有回声消除的宿主请使用耳机，或�
 | -------------------------- | -------------------------------------- |
 | 完成第一次语音对话         | [入门指南](docs/zh/getting-started.md) |
 | 给 AIUI Agent 加入语音能力 | [接入指南](docs/zh/integration.md)     |
-| 配置 Agora 和登录认证      | [后端指南](docs/zh/backend.md)         |
+| 配置云服务和登录认证       | [后端指南](docs/zh/backend.md)         |
 | 查找方法和参数             | [API 参考](docs/zh/api.md)             |
 | 排查连接或声音问题         | [常见问题](docs/zh/troubleshooting.md) |
 | 运行测试或参与开发         | [开发与验证](docs/zh/validation.md)    |
@@ -159,4 +163,4 @@ npm ci
 npm run check
 ```
 
-项目采用 [MIT 许可证](LICENSE)。Agora 云端用量按你的 Agora 套餐计费。
+项目采用 [MIT 许可证](LICENSE)。云端和模型用量按服务商套餐计费。

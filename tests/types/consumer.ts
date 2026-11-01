@@ -32,8 +32,21 @@ const backend = createHttpVoiceBackend({
 });
 const session = createAgoraVoiceSession({
   backend,
+  tools: [
+    {
+      name: 'endConversation',
+      description: 'End the call at the user request.',
+      parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
+      execute(_, { endConversation, signal }) {
+        signal.throwIfAborted();
+        endConversation();
+        return { ending: true };
+      },
+    },
+  ],
   transcripts: createAgoraRtmTranscripts({ RTM: OfficialRTM }),
 });
+session.addEventListener('toolstatechange', () => console.log(session.getToolState()));
 session.addEventListener('transcriptchange', () => {
   console.log(session.getTranscriptSnapshot()[0]?.status);
 });

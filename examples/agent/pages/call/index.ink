@@ -1,19 +1,31 @@
 <script setup>
-  import { createAgoraVoiceSession, createHttpVoiceBackend, createWorkerTranscripts } from '@yodaos-pkg/agora-aiui-sdk/voice';
+  import {
+    createAgoraVoiceSession,
+    createHttpVoiceBackend,
+    createWorkerTranscripts,
+  } from '@yodaos-pkg/agora-aiui-sdk/voice';
+  import { getCallCopy } from './copy.js';
+  import { createCallTools } from './tools.js';
   import configuration from '../../configuration.js';
-  import { changedFields, presentCall, readConversation } from './presentation.js';
+  import { audioFeedback, changedFields, presentCall, readConversation } from './presentation.js';
+
+  const copy = getCallCopy(configuration.provider);
 
   export default {
     data: {
-      ...presentCall(),
+      ...presentCall({}, false, {}, configuration.provider),
+      copy,
       micMuted: false,
       micSuppressed: false,
       speakerMuted: false,
       clock: '00:00',
-      bar1: 3,
-      bar2: 3,
-      bar3: 3,
       orbScale: 1,
+      orbColor: 'default',
+      inputGlow: 0,
+      outputGlow: 0.2,
+      glowScale: 1,
+      inputActive: false,
+      pressed: '',
       userLine: '',
       transcriptNote: '',
     },
@@ -39,6 +51,7 @@
       this.unloaded = true;
       this.clearLevelTimer();
       this.clearTranscripts();
+      if (this.pressTimer != null) clearTimeout(this.pressTimer);
       if (this.voice && this.update) this.voice.removeEventListener('statechange', this.update);
       void this.voice?.stop();
     },
@@ -46,29 +59,39 @@
       if (this.levelTimer != null) clearInterval(this.levelTimer);
       this.levelTimer = null;
     },
-    renderCall(state, speaking = false, bars = [3, 3, 3], energy = 0) {
+    renderCall(state, speaking = false) {
+      const { input, output } = this.audioFeedback || { input: 0, output: 0 };
+      const energy = Math.max(input, output);
+      const running =
+        state.lifecycle === 'running' && state.media === 'connected' && state.audio === 'running';
       const elapsed = this.startedAt ? Math.floor((Date.now() - this.startedAt) / 1000) : 0;
       const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
       const seconds = String(elapsed % 60).padStart(2, '0');
-      if (Date.now() < (this.interruptedUntil || 0)) bars = [3, 3, 3];
       const patch = changedFields(this.data, {
-        ...presentCall(state, speaking, {
-          thinking: this.cloudActivity?.thinking,
-          interrupted: Date.now() < (this.interruptedUntil || 0),
-        }),
+        ...presentCall(
+          state,
+          speaking,
+          {
+            thinking: this.cloudActivity?.thinking,
+            interrupted: Date.now() < (this.interruptedUntil || 0),
+          },
+          configuration.provider,
+        ),
         micMuted: state.microphoneMuted,
         micSuppressed: state.microphoneSuppressed,
         speakerMuted: state.speakerMuted,
         clock: `${minutes}:${seconds}`,
-        bar1: bars[0],
-        bar2: bars[1],
-        bar3: bars[2],
-        orbScale: 1 + Math.round(energy * 8) / 100,
+        orbScale: 1 + Math.round(energy * 110) / 1000,
+        inputGlow: running ? Math.round(input * 85) / 100 : 0,
+        outputGlow: running ? 0.2 + Math.round(output * 65) / 100 : 0.15,
+        glowScale: 1 + Math.round(energy * 18) / 100,
+        inputActive: running && !state.microphoneMuted && !state.microphoneSuppressed && input > 0.15,
       });
       if (Object.keys(patch).length) this.setData(patch);
     },
     async connect() {
       if (this.unloaded || this.data.active || this.data.busy) return;
+      this.press('start');
       this.clearLevelTimer();
       this.clearTranscripts();
       if (this.voice && this.update) this.voice.removeEventListener('statechange', this.update);
@@ -78,11 +101,18 @@
       this.interruptedKey = '';
       this.startedAt = 0;
       this.speakingUntil = 0;
+      this.audioFeedback = { input: 0, output: 0 };
+      this.levelUpdatedAt = 0;
       const voice = createAgoraVoiceSession({
         backend: this.backend,
         timeout: 45000,
         transcripts: this.transcriptSource,
         microphoneMode: configuration.microphoneMode ?? 'full-duplex',
+        ...(configuration.localTools ? {
+          tools: createCallTools((color) => {
+            if (!this.unloaded && this.voice === voice) this.setData({ orbColor: color });
+          }),
+        } : {}),
       });
       this.voice = voice;
       this.update = () => {
@@ -102,8 +132,7 @@
       voice.addEventListener('transcriptstatechange', this.transcriptStateUpdate);
       try {
         await voice.start();
-        if (this.unloaded || this.voice !== voice || voice.getState().lifecycle !== 'running')
-          return;
+        if (this.unloaded || this.voice !== voice || voice.getState().lifecycle !== 'running') return;
         this.startedAt = Date.now();
         this.levelTimer = setInterval(() => this.refreshAudio(voice), 160);
         this.refreshAudio(voice);
@@ -121,18 +150,12 @@
         this.speakingUntil = Date.now() + 450;
       if (!audible || state.speakerMuted) this.speakingUntil = 0;
       const speaking = Date.now() < this.speakingUntil;
-      const level = speaking
-        ? levels.remote
-        : state.microphoneMuted || state.microphoneSuppressed
-          ? -60
-          : levels.local;
-      const energy = audible ? Math.max(0, Math.min(1, (level + 55) / 35)) : 0;
-      this.renderCall(
-        state,
-        speaking,
-        [3 + Math.round(energy * 8), 3 + Math.round(energy * 16), 3 + Math.round(energy * 24)],
-        energy,
-      );
+      // RTM events also refresh levels. Smooth by elapsed time, not event count.
+      const now = performance.now();
+      const elapsed = this.levelUpdatedAt ? Math.max(0, now - this.levelUpdatedAt) : 160;
+      this.levelUpdatedAt = now;
+      this.audioFeedback = audioFeedback(state, levels, this.audioFeedback, elapsed);
+      this.renderCall(state, speaking);
     },
     clearTranscripts() {
       if (this.transcriptUpdate)
@@ -146,10 +169,7 @@
       if (this.unloaded || this.voice !== voice) return;
       const state = voice.getTranscriptState();
       if (['failed', 'disconnected', 'closed'].includes(state.status)) this.cloudActivity = {};
-      const columns = Math.max(
-        12,
-        Math.min(24, Math.floor(((window.innerWidth || 448) - 48) / 17)),
-      );
+      const columns = Math.max(12, Math.min(24, Math.floor(((window.innerWidth || 448) - 48) / 17)));
       const { userLine, interruptedKey } = readConversation(voice.getTranscriptSnapshot(), columns);
       if (interruptedKey && interruptedKey !== this.interruptedKey) {
         this.interruptedKey = interruptedKey;
@@ -161,31 +181,54 @@
         userLine,
         transcriptNote:
           state.status === 'failed'
-            ? '实时文字暂不可用，语音可以继续'
+            ? copy.transcriptFailed
             : state.status === 'disconnected'
-              ? '文字连接恢复中…'
+              ? copy.transcriptRecovering
               : '',
       });
       if (Object.keys(patch).length) this.setData(patch);
       this.refreshAudio(voice);
     },
+    press(control) {
+      if (this.pressTimer != null) clearTimeout(this.pressTimer);
+      this.setData({ pressed: control });
+      this.pressTimer = setTimeout(() => {
+        this.pressTimer = null;
+        if (!this.unloaded) this.setData({ pressed: '' });
+      }, 220);
+    },
+    activateOrb() {
+      const action = this.data.orbAction;
+      if (!action || this.unloaded) return;
+      if (action === 'start') void this.connect();
+      else if (action === 'resume') void this.resumeAudio();
+      else if (action === 'soundOn') this.toggleSpeaker();
+      else this.toggleMicrophone();
+      this.press('orb');
+    },
     toggleMicrophone() {
-      if (this.data.canControl) this.voice?.setMicrophoneMuted(!this.data.micMuted);
+      if (!this.data.canControl || this.data.micSuppressed) return;
+      this.press('microphone');
+      this.voice?.setMicrophoneMuted(!this.data.micMuted);
     },
     toggleSpeaker() {
-      if (this.data.canControl) this.voice?.setSpeakerMuted(!this.data.speakerMuted);
+      if (!this.data.canControl) return;
+      this.press('speaker');
+      this.voice?.setSpeakerMuted(!this.data.speakerMuted);
     },
     async resumeAudio() {
       const voice = this.voice;
       if (!this.data.canResume || !voice) return;
+      this.press('resume');
       try {
         await voice.resumeAudio();
       } catch {
         if (!this.unloaded && this.voice === voice && this.data.canResume)
-          this.setData({ hint: '请回到前台，再点击继续聊天' });
+          this.setData({ hint: copy.resumeHint });
       }
     },
     stop() {
+      this.press('end');
       this.clearLevelTimer();
       this.clearTranscripts();
       void this.voice?.stop();
@@ -193,10 +236,10 @@
   };
 </script>
 <page>
-  <view class="screen state-{{phase}}">
+  <view class="screen state-{{phase}} {{inputActive ? 'input-active' : ''}}">
     <view class="header">
       <view class="identity">
-        <text class="name">小语</text>
+        <text class="name">{{copy.name}}</text>
         <text class="activity">{{title}}</text>
       </view>
       <view class="connection {{connected ? 'online' : ''}}">
@@ -207,40 +250,40 @@
     </view>
 
     <view class="presence">
-      <view class="orb-envelope" style="transform: scale({{orbScale}});">
-        <view class="orb-halo"></view>
-        <view class="orb-orbit"></view>
-        <view class="orb">
-          <view class="orb-light"></view>
-          <view class="orb-fluid"></view>
-          <view class="orb-tide"></view>
-          <view class="orb-glint"></view>
-          <view ink:if="{{phase === 'thinking' || phase === 'connecting'}}" class="thought">
-            <view class="thought-dot dot-one"></view>
-            <view class="thought-dot dot-two"></view>
-            <view class="thought-dot dot-three"></view>
-          </view>
-          <view ink:else class="wave">
-            <view class="wave-bar" style="transform: scaleY({{bar1 / 30}});"></view>
-            <view class="wave-bar" style="transform: scaleY({{bar2 / 30}});"></view>
-            <view class="wave-bar" style="transform: scaleY({{bar3 / 30}});"></view>
-            <view class="wave-bar" style="transform: scaleY({{bar2 / 30}});"></view>
-            <view class="wave-bar" style="transform: scaleY({{bar1 / 30}});"></view>
+      <button
+        class="orb-button {{pressed === 'orb' ? 'is-pressed' : ''}}"
+        disabled="{{!orbAction}}"
+        aria-label="{{orbLabel}}"
+        bindtap="activateOrb"
+      >
+        <view class="orb-envelope orb-color-{{orbColor}}" style="transform: scale({{orbScale}});">
+          <view
+            class="orb-halo"
+            style="opacity: {{outputGlow}}; transform: scale({{glowScale}});"
+          ></view>
+          <view
+            class="input-glow"
+            style="opacity: {{inputGlow}}; transform: scale({{glowScale}});"
+          ></view>
+          <view class="orb">
+            <view class="orb-cloud cloud-blue"></view>
+            <view class="orb-cloud cloud-aqua"></view>
+            <view class="orb-cloud cloud-pearl"></view>
+            <view class="orb-sheen"></view>
           </view>
         </view>
-        <view ink:if="{{phase === 'interrupted'}}" class="interrupt-ring"></view>
-      </view>
+      </button>
     </view>
 
     <text class="user-line {{userLine && !transcriptNote ? 'has-speech' : ''}}"
-      >{{phase === 'failed' || phase === 'paused' || phase === 'recovering' ? hint : transcriptNote
-      || userLine || hint}}</text
+      >{{phase === 'failed' || phase === 'paused' || phase === 'recovering' ? hint : transcriptNote ||
+      userLine || hint}}</text
     >
 
     <view ink:if="{{active}}" class="controls">
       <button
         ink:if="{{canControl}}"
-        class="control {{micMuted || micSuppressed ? 'is-muted' : ''}}"
+        class="control {{pressed === 'microphone' ? 'is-pressed' : ''}} {{micMuted || micSuppressed ? 'is-muted' : ''}}"
         disabled="{{!canControl || micSuppressed}}"
         bindtap="toggleMicrophone"
       >
@@ -250,18 +293,26 @@
           src="{{micMuted || micSuppressed ? '/assets/microphone-off.svg' : '/assets/microphone.svg'}}"
           mode="aspectFit"
         />
-        <text>{{micSuppressed ? '等我说完' : micMuted ? '开麦' : '静音'}}</text>
+        <text>{{micSuppressed ? copy.suppressed : micMuted ? copy.unmute : copy.mute}}</text>
       </button>
-      <button class="control end" disabled="{{phase === 'stopping'}}" bindtap="stop">
+      <button
+        class="control end {{pressed === 'end' ? 'is-pressed' : ''}}"
+        disabled="{{phase === 'stopping'}}"
+        bindtap="stop"
+      >
         <image class="control-icon" src="/assets/end.svg" mode="aspectFit" />
-        <text>{{phase === 'connecting' ? '取消' : '结束'}}</text>
+        <text>{{phase === 'connecting' ? copy.cancel : copy.end}}</text>
       </button>
-      <button ink:if="{{canResume}}" class="resume" bindtap="resumeAudio">
-        <text>继续聊天</text>
+      <button
+        ink:if="{{canResume}}"
+        class="resume {{pressed === 'resume' ? 'is-pressed' : ''}}"
+        bindtap="resumeAudio"
+      >
+        <text>{{copy.resume}}</text>
       </button>
       <button
         ink:if="{{canControl && !canResume}}"
-        class="control {{speakerMuted ? 'is-muted' : ''}}"
+        class="control {{pressed === 'speaker' ? 'is-pressed' : ''}} {{speakerMuted ? 'is-muted' : ''}}"
         bindtap="toggleSpeaker"
       >
         <image
@@ -269,15 +320,18 @@
           src="{{speakerMuted ? '/assets/speaker-off.svg' : '/assets/speaker.svg'}}"
           mode="aspectFit"
         />
-        <text>{{speakerMuted ? '开声音' : '声音'}}</text>
+        <text>{{speakerMuted ? copy.soundOn : copy.sound}}</text>
       </button>
     </view>
     <view ink:else class="controls">
-      <button class="start" disabled="{{busy}}" bindtap="connect">
+      <button
+        class="start {{pressed === 'start' ? 'is-pressed' : ''}}"
+        disabled="{{busy}}"
+        bindtap="connect"
+      >
         <image class="control-icon" src="/assets/call.svg" mode="aspectFit" />
         <text
-          >{{phase === 'failed' ? '重新连接' : phase === 'stopped' ? '再聊一会儿' :
-          '开始聊天'}}</text
+          >{{phase === 'failed' ? copy.retry : phase === 'stopped' ? copy.restart : copy.start}}</text
         >
       </button>
     </view>
@@ -320,6 +374,7 @@
     color: var(--color-primary);
   }
   .connection {
+    flex-shrink: 0;
     gap: 5px;
   }
   .connection-dot {
@@ -345,38 +400,83 @@
     align-items: center;
     justify-content: center;
   }
-  .orb-envelope {
-    position: relative;
+  .orb-button,
+  .orb-button:hover,
+  .orb-button:focus {
+    padding: 0;
+    border-width: 0;
+    border-radius: 50%;
+    background-color: transparent;
+  }
+  .orb-button {
     width: 108px;
     height: 108px;
     flex-shrink: 0;
-    transition: transform 160ms ease-out;
+    transition: transform 180ms ease-out;
   }
-  .orb-halo {
-    position: absolute;
-    width: 160%;
-    height: 160%;
-    left: -30%;
-    top: -30%;
-    border-radius: 50%;
-    background-image: radial-gradient(
-      circle at center,
-      var(--color-primary-40) 0%,
-      transparent 68%
-    );
-    opacity: 0.7;
-    animation: aura-breathe 3.6s ease-in-out infinite alternate;
+  .orb-button:hover .orb-sheen,
+  .orb-button:focus .orb-sheen {
+    opacity: 0.3;
   }
-  .orb-orbit {
+  .orb-button.is-pressed {
+    transform: scale(0.96);
+  }
+  .orb-envelope {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    flex-shrink: 0;
+    opacity: 0.95;
+    transition:
+      transform 220ms ease-out,
+      opacity 600ms ease;
+  }
+  .orb-envelope {
+    --orb-primary: var(--color-primary);
+    --orb-primary-60: var(--color-primary-60);
+    --orb-primary-40: var(--color-primary-40);
+    --orb-secondary: var(--color-secondary);
+  }
+  .orb-color-blue {
+    --orb-primary: #408aff;
+    --orb-primary-60: #3475bd;
+    --orb-primary-40: #22466f;
+    --orb-secondary: #92e4ff;
+  }
+  .orb-color-green {
+    --orb-primary: #38d5a0;
+    --orb-primary-60: #2e997c;
+    --orb-primary-40: #20584d;
+    --orb-secondary: #a3f5b5;
+  }
+  .orb-color-purple {
+    --orb-primary: #aa7cff;
+    --orb-primary-60: #7952bd;
+    --orb-primary-40: #493568;
+    --orb-secondary: #efb3ef;
+  }
+  .orb-color-orange {
+    --orb-primary: #ffae64;
+    --orb-primary-60: #bd7851;
+    --orb-primary-40: #704a38;
+    --orb-secondary: #ffe1ac;
+  }
+  .orb-halo,
+  .input-glow {
     position: absolute;
-    top: -8%;
-    left: -8%;
-    width: 116%;
-    height: 116%;
+    width: 150%;
+    height: 150%;
+    left: -25%;
+    top: -25%;
     border-radius: 50%;
-    border: 1px solid var(--color-primary-40);
-    opacity: 0.5;
-    animation: orbit-breathe 3.6s ease-in-out infinite alternate;
+    background-image: radial-gradient(circle at center, var(--orb-primary-40) 8%, transparent 70%);
+    opacity: 0.3;
+    transition:
+      opacity 220ms ease-out,
+      transform 320ms ease-out;
+  }
+  .input-glow {
+    background-image: radial-gradient(circle at center, var(--orb-secondary) 15%, transparent 65%);
   }
   .orb {
     position: absolute;
@@ -384,163 +484,105 @@
     height: 100%;
     border-radius: 50%;
     overflow: hidden;
-    align-items: center;
-    justify-content: center;
-    background-color: var(--color-primary);
+    background-color: var(--color-text-primary);
+    transition: transform 350ms ease-out;
   }
-  .orb-light {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    left: 0;
-    top: 0;
-    background-image: radial-gradient(
-      circle at 35% 25%,
-      var(--color-text-primary) 0%,
-      var(--color-primary) 45%,
-      var(--color-background) 100%
-    );
-  }
-  .orb-fluid {
+  /* These loops never change with conversation state. Only their light levels do. */
+  .orb-cloud {
     position: absolute;
     width: 140%;
     height: 140%;
     left: -20%;
     top: -20%;
-    background-image: radial-gradient(
-      ellipse at 20% 45%,
-      var(--color-secondary) 0%,
-      transparent 62%
-    );
-    animation: fluid-drift 7s ease-in-out infinite alternate;
+    transition: opacity 700ms ease;
   }
-  .orb-tide {
-    position: absolute;
-    width: 130%;
-    height: 130%;
-    left: -15%;
-    top: -15%;
+  .cloud-blue {
     background-image: radial-gradient(
-      ellipse at 65% 75%,
-      var(--color-text-primary) 0%,
-      transparent 55%
+      ellipse at 75% 50%,
+      var(--orb-primary) 12%,
+      var(--orb-primary-60) 40%,
+      var(--orb-primary-40) 66%
     );
-    opacity: 0.7;
-    animation: fluid-drift 5s ease-in-out infinite alternate-reverse;
+    opacity: 0.9;
+    animation: cloud-flow 12s linear infinite;
   }
-  .orb-glint {
+  .cloud-aqua {
+    background-image: radial-gradient(
+      ellipse at 25% 55%,
+      var(--orb-secondary) 5%,
+      var(--orb-primary-40) 50%,
+      var(--color-background) 100%
+    );
+    opacity: 0.25;
+    animation: cloud-return 19s linear infinite;
+  }
+  .cloud-pearl {
+    width: 160%;
+    height: 120%;
+    left: -30%;
+    top: -10%;
+    background-image: radial-gradient(
+      ellipse at 35% 60%,
+      var(--color-text-primary) 25%,
+      var(--orb-primary-40) 75%
+    );
+    opacity: 0.95;
+    animation: cloud-flow 16s linear infinite;
+  }
+  .orb-sheen {
     position: absolute;
     width: 100%;
     height: 100%;
     left: 0;
     top: 0;
     border-radius: 50%;
-    border: 1px solid var(--color-primary-60);
+    background-image: radial-gradient(
+      circle at 40% 30%,
+      var(--color-text-primary) 0%,
+      var(--orb-primary-40) 50%,
+      var(--color-background) 100%
+    );
+    opacity: 0.16;
+    transition: opacity 250ms ease-out;
+  }
+  .state-speaking .cloud-blue {
+    opacity: 1;
+  }
+  .state-speaking .cloud-pearl {
     opacity: 0.8;
   }
-  .wave,
-  .thought {
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    height: 34px;
+  .state-thinking .cloud-aqua,
+  .state-connecting .cloud-aqua {
+    opacity: 0.4;
   }
-  .wave-bar {
-    width: 4px;
-    height: 30px;
-    border-radius: 3px;
-    background-color: var(--color-background);
-    opacity: 0.78;
-    transition: transform 140ms ease-out;
+  .state-thinking .cloud-pearl,
+  .state-connecting .cloud-pearl {
+    opacity: 0.75;
   }
-  .thought-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 2px;
-    background-color: var(--color-background);
-    animation: thought-pulse 900ms ease-in-out infinite alternate;
+  .state-interrupted .cloud-pearl {
+    opacity: 1;
   }
-  .dot-two {
-    animation-delay: 200ms;
+  .state-interrupted .orb {
+    transform: scale(0.96);
   }
-  .dot-three {
-    animation-delay: 400ms;
+  .state-connecting .orb {
+    transform: scale(0.94);
   }
-  .state-thinking .orb-fluid,
-  .state-connecting .orb-fluid {
-    animation: fluid-turn 1.8s linear infinite;
-  }
-  .state-thinking .orb-orbit,
-  .state-connecting .orb-orbit {
-    animation: orbit-breathe 900ms ease-in-out infinite alternate;
-  }
-  .state-speaking .orb-fluid {
-    animation: fluid-drift 1.4s ease-in-out infinite alternate;
-  }
-  .state-speaking .orb-tide {
-    animation: fluid-turn 3s linear infinite;
-  }
-  .state-speaking .orb-orbit {
-    border-color: var(--color-secondary);
-    animation-duration: 700ms;
-  }
-  .state-interrupted .orb-fluid {
-    animation: interrupt-settle 350ms ease-out both;
-  }
-  .interrupt-ring {
-    position: absolute;
-    left: -6%;
-    top: -6%;
-    width: 112%;
-    height: 112%;
-    border-radius: 50%;
-    border: 1px solid var(--color-text-primary);
-    animation: interrupt-release 1.1s ease-out both;
+  .input-active .activity,
+  .input-active .has-speech {
+    color: var(--color-text-primary);
   }
   .state-idle .orb-envelope,
-  .state-stopped .orb-envelope,
+  .state-stopped .orb-envelope {
+    opacity: 0.7;
+  }
   .state-stopping .orb-envelope,
   .state-failed .orb-envelope,
   .state-muted .orb-envelope,
   .state-paused .orb-envelope,
   .state-quiet .orb-envelope,
   .state-recovering .orb-envelope {
-    opacity: 0.42;
-  }
-  .state-idle .orb-fluid,
-  .state-idle .orb-tide,
-  .state-idle .orb-halo,
-  .state-idle .orb-orbit,
-  .state-stopped .orb-fluid,
-  .state-stopped .orb-tide,
-  .state-stopped .orb-halo,
-  .state-stopped .orb-orbit,
-  .state-stopping .orb-fluid,
-  .state-stopping .orb-tide,
-  .state-stopping .orb-halo,
-  .state-stopping .orb-orbit,
-  .state-failed .orb-fluid,
-  .state-failed .orb-tide,
-  .state-failed .orb-halo,
-  .state-failed .orb-orbit,
-  .state-muted .orb-fluid,
-  .state-muted .orb-tide,
-  .state-muted .orb-halo,
-  .state-muted .orb-orbit,
-  .state-paused .orb-fluid,
-  .state-paused .orb-tide,
-  .state-paused .orb-halo,
-  .state-paused .orb-orbit,
-  .state-quiet .orb-fluid,
-  .state-quiet .orb-tide,
-  .state-quiet .orb-halo,
-  .state-quiet .orb-orbit,
-  .state-recovering .orb-fluid,
-  .state-recovering .orb-tide,
-  .state-recovering .orb-halo,
-  .state-recovering .orb-orbit {
-    animation: none;
+    opacity: 0.4;
   }
   .user-line {
     width: 100%;
@@ -575,6 +617,19 @@
     justify-content: center;
     gap: 6px;
     background-color: transparent;
+    transition:
+      transform 140ms ease-out,
+      background-color 180ms ease;
+  }
+  .control.is-pressed,
+  .start.is-pressed,
+  .resume.is-pressed {
+    transform: scale(0.94);
+  }
+  .control:hover,
+  .start:hover,
+  .resume:hover {
+    background-color: var(--color-primary-40);
   }
   .control text,
   .start text,
@@ -624,35 +679,8 @@
     color: var(--color-primary);
     border-color: var(--color-primary);
   }
-  @keyframes aura-breathe {
-    from {
-      transform: scale(0.92);
-      opacity: 0.5;
-    }
-    to {
-      transform: scale(1.08);
-      opacity: 0.8;
-    }
-  }
-  @keyframes orbit-breathe {
-    from {
-      transform: scale(0.98);
-      opacity: 0.3;
-    }
-    to {
-      transform: scale(1.08);
-      opacity: 0.65;
-    }
-  }
-  @keyframes fluid-drift {
-    from {
-      transform: rotate(-25deg) scale(0.94);
-    }
-    to {
-      transform: rotate(38deg) scale(1.1);
-    }
-  }
-  @keyframes fluid-turn {
+  /* Full rotations keep both position and velocity continuous at the loop boundary. */
+  @keyframes cloud-flow {
     from {
       transform: rotate(0deg);
     }
@@ -660,32 +688,12 @@
       transform: rotate(360deg);
     }
   }
-  @keyframes thought-pulse {
+  @keyframes cloud-return {
     from {
-      opacity: 0.2;
-      transform: scale(0.8);
+      transform: rotate(360deg);
     }
     to {
-      opacity: 0.8;
-      transform: scale(1.15);
-    }
-  }
-  @keyframes interrupt-settle {
-    from {
-      transform: scale(1.15);
-    }
-    to {
-      transform: scale(0.96);
-    }
-  }
-  @keyframes interrupt-release {
-    from {
-      transform: scale(0.96);
-      opacity: 0.9;
-    }
-    to {
-      transform: scale(1.3);
-      opacity: 0;
+      transform: rotate(0deg);
     }
   }
   @media (max-height: 220px) {
@@ -700,21 +708,9 @@
     .activity {
       font-size: 14px;
     }
-    .orb-envelope {
+    .orb-button {
       width: 56px;
       height: 56px;
-    }
-    .orb-orbit {
-      width: 110%;
-      height: 110%;
-      top: -5%;
-      left: -5%;
-    }
-    .wave {
-      gap: 3px;
-    }
-    .wave-bar {
-      width: 3px;
     }
     .user-line {
       height: 23px;
@@ -755,7 +751,7 @@
       gap: 6px;
     }
     .clock {
-      display: none;
+      margin-left: 0;
     }
     .cloud {
       font-size: 14px;

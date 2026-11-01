@@ -16,6 +16,7 @@ const voice = createAgoraVoiceSession({ backend, timeout: 30000 });
 
 | 参数             | 含义                                                                   | 默认值        |
 | ---------------- | ---------------------------------------------------------------------- | ------------- |
+| `tools`          | 本地工具定义及执行函数，需要后端支持。见[本地工具](local-tools.md)。   | `[]`          |
 | `backend`        | 实现 `VoiceBackend` 的对象，负责预留凭证、启停 AI。                    | —             |
 | `connection`     | `AgoraConnection`，或 `async ({ signal }) => connection`，只连接音频。 | —             |
 | `timeout`        | 启动全过程的超时时间，单位毫秒。                                       | `15000`       |
@@ -251,3 +252,10 @@ const backend = createHttpVoiceBackend({
 | `TRANSCRIPTS`   | 对话文字读取失败，语音通话可以继续。    |
 
 排查顺序见[常见问题](troubleshooting.md)。
+
+## 本地工具状态
+
+监听 `toolstatechange` 并调用 `getToolState()`，返回 `disabled`、`connecting`、
+`connected`、`disconnected` 或 `closed`。`connected` 表示工具传递链路可用，
+不代表 LLM 已调用工具。配置了工具时，`stop()` 的清理报告包含 `tools`。
+启动时若后端未确认启用工具，会以 `TOOLS` 错误拒绝。执行规则见[本地工具](local-tools.md)。

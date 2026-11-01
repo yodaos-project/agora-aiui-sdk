@@ -16,13 +16,14 @@ const voice = createAgoraVoiceSession({ backend, timeout: 30000 });
 `new AgoraVoiceSession(options)` is equivalent. Choose exactly one of `backend`
 or `connection`.
 
-| Option           | Meaning                                                                             | Default       |
-| ---------------- | ----------------------------------------------------------------------------------- | ------------- |
-| `backend`        | A `VoiceBackend` that reserves credentials and starts/stops the AI.                 | —             |
-| `connection`     | An `AgoraConnection`, or `async ({ signal }) => connection`. Connects audio only.   | —             |
-| `timeout`        | Total startup deadline in milliseconds.                                             | `15000`       |
-| `cleanupTimeout` | Deadline for each independent cleanup operation, in milliseconds.                   | `5000`        |
-| `microphoneMode` | `full-duplex`, or `half-duplex` to pause microphone transmission during AI replies. | `full-duplex` |
+| Option           | Meaning                                                                                                         | Default       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
+| `tools`          | Local tool definitions and execute functions; requires a compatible backend. See [Local tools](local-tools.md). | `[]`          |
+| `backend`        | A `VoiceBackend` that reserves credentials and starts/stops the AI.                                             | —             |
+| `connection`     | An `AgoraConnection`, or `async ({ signal }) => connection`. Connects audio only.                               | —             |
+| `timeout`        | Total startup deadline in milliseconds.                                                                         | `15000`       |
+| `cleanupTimeout` | Deadline for each independent cleanup operation, in milliseconds.                                               | `5000`        |
+| `microphoneMode` | `full-duplex`, or `half-duplex` to pause microphone transmission during AI replies.                             | `full-duplex` |
 
 Both deadlines must be positive finite numbers. The session owns the microphone
 tracks and audio context it creates; this version does not accept caller-provided
@@ -278,3 +279,11 @@ Invalid construction/configuration arguments may also throw ordinary JavaScript 
 | `LEASE`         | Backend session renewal failed.                                |
 
 For a diagnosis workflow, see [troubleshooting](troubleshooting.md).
+
+## Local tool status
+
+Listen for `toolstatechange` and call `getToolState()`. Values are `disabled`,
+`connecting`, `connected`, `disconnected`, and `closed`. `connected` describes the
+delivery channel, not whether the LLM has called a tool. `stop()` includes a `tools`
+cleanup result when tools were configured. A missing backend acknowledgement at
+startup rejects with `TOOLS`. See [Local tools](local-tools.md) for execution rules.

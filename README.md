@@ -20,7 +20,7 @@ well for AI glasses, language practice, interactive guides, and step-by-step hel
 
 **Agora AIUI SDK** brings these conversations to AIUI Agents running on
 [Ink](https://github.com/jsar-project/ink). Your AIUI Agent captures speech and
-plays replies; Agora Cloud provides speech recognition, the language model, and
+plays replies; Agora or Shengwang Cloud provides speech recognition, the language model, and
 the AI's voice. Configure its personality, language, and voice in Agora Agent Studio.
 
 ## What you can build
@@ -34,13 +34,15 @@ the AI's voice. Configure its personality, language, and voice in Agora Agent St
 
 ## A conversation, ready to adapt
 
-The included example is a compact voice companion named **小语**, designed for
-color and green-only glasses displays.
+The included example is a compact voice companion designed for color and
+green-only glasses displays. Choose `agora` for English and **Agora Cloud**,
+or `shengwang` for Chinese and **声网 Cloud**, in the example configuration.
 
 - **Speak naturally.** Two-way audio with microphone and speaker controls.
 - **Interrupt the reply.** Full-duplex conversation on hosts with echo cancellation or with headphones.
 - **See what was heard.** Your latest recognized speech updates in a single line.
 - **Follow the conversation.** An animated orb shows listening, thinking, speaking, and confirmed interruptions.
+- **Let the AI act.** [Define local tools](docs/local-tools.md) to change the interface or end a call; execute functions stay in your AIUI Agent.
 - **Keep the interface responsive.** Native Ink processes real-time text in an Agent Worker, separately from page animation and audio.
 
 The SDK also exposes AI reply text, audio levels, connection states, and volume
@@ -54,8 +56,8 @@ loaded by the example's Worker. JavaScript modules and TypeScript declarations a
 You will need:
 
 - Node.js 22+ and a recent Ink host with microphone, WHIP, and Worker networking support.
-- An Agora project enabled for duplex WHIP and Signaling (RTM).
-- A published voice agent in Agora Agent Studio and its `pipelineId`.
+- An Agora or Shengwang project enabled for duplex WHIP and Signaling (RTM).
+- A published voice agent in AI Studio and its `pipelineId`.
 
 ```sh
 git clone https://github.com/yodaos-project/agora-aiui-sdk.git
@@ -64,13 +66,13 @@ npm ci
 npm run example:prepare
 ```
 
-Follow the **[getting started guide](docs/getting-started.md)** to find your Agora
-settings, configure the reference backend, and point the AIUI Agent at it.
+Follow the **[getting started guide](docs/getting-started.md)** from account registration through project setup, agent publication, and the first call.
 
 Start the configured backend in one terminal:
 
 ```sh
-npm run example:server
+npm run example:server          # Agora
+# or: npm run example:server:cn # Shengwang China
 ```
 
 Open the example in another terminal:
@@ -79,10 +81,10 @@ Open the example in another terminal:
 ink-open examples/agent --networking-transport native --permission-checks --theme yodaos-sprite-color
 ```
 
-Tap **开始聊天** (Start chat), allow the microphone, and ask a question. Try
-interrupting a longer answer. Tap **结束** (End) when you are done.
+Tap **Let’s talk**, allow the microphone, and ask a question. Try
+interrupting a longer answer. Tap **End** when you are done.
 Keep the AIUI Agent in the foreground; if playback pauses after switching windows,
-tap **继续聊天** (Continue chatting).
+tap **Resume**.
 
 ## Add voice to your AIUI Agent
 
@@ -118,13 +120,13 @@ shows a complete page with lifecycle handling and audio controls. Use the
 
 ## How it works
 
-| Piece                | Responsibility                                              |
-| -------------------- | ----------------------------------------------------------- |
-| Your AIUI Agent      | Capture speech, play replies, and present the conversation. |
-| Your session backend | Issue temporary credentials and start/stop the cloud AI.    |
-| Agora Cloud          | Transport audio and run your configured voice agent.        |
+| Piece                   | Responsibility                                              |
+| ----------------------- | ----------------------------------------------------------- |
+| Your AIUI Agent         | Capture speech, play replies, and present the conversation. |
+| Your session backend    | Issue temporary credentials and start/stop the cloud AI.    |
+| Agora / Shengwang Cloud | Transport audio and run your configured voice agent.        |
 
-Audio travels directly between Ink and Agora Cloud. The session backend handles
+Audio travels directly between Ink and the selected cloud. The session backend handles
 setup and cleanup. Use the included Node.js backend as a starting point, connect
 your own service, or [use existing temporary credentials](docs/integration.md#use-existing-temporary-credentials)
 when your system already manages the cloud AI.
@@ -134,16 +136,16 @@ uses different string UIDs for the AIUI Agent and the cloud AI.
 
 ## Compatibility and verification
 
-The macOS example has been tested with real Agora audio, live ASR, interruptions,
+The macOS example has been tested with real Agora and Shengwang audio, live ASR, interruptions,
 and repeated connect/stop cycles. The user confirmed fluent speech and interruptions;
-measurements and host-specific results are in [verification notes](docs/validation.md#real-cloud-results).
+Shengwang voice-controlled color and hangup were also verified. Measurements and host-specific results are in [verification notes](docs/validation.md#real-cloud-results).
 
 Native Ink runs the RTM Worker on a separate thread. Ink Web currently shares its
 browser event loop with the Worker realm; measure Web performance separately.
 For hosts without echo cancellation, use headphones or [turn-taking mode](docs/api.md#take-turns-speaking).
 
 This version focuses on foreground conversations. Automatic call reconnection,
-background calling, general chat messaging, local tool calls, and word captions
+background calling, general chat messaging, and word captions
 synchronized to playback are outside the current API.
 
 ## Documentation
@@ -167,4 +169,4 @@ npm ci
 npm run check
 ```
 
-Licensed under the [MIT License](LICENSE). Agora Cloud usage follows your Agora plan.
+Licensed under the [MIT License](LICENSE). Cloud and model usage follows your provider plans.

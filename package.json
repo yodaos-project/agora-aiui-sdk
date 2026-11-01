@@ -30,6 +30,7 @@
     "format:check": "prettier --check .",
     "example:prepare": "node scripts/prepare-agent.js",
     "example:server": "node --env-file=examples/server/.env examples/server/main.js",
+    "example:server:cn": "node --env-file=examples/server/.env.shengwang examples/server/main.js",
     "check": "npm run test && npm run typecheck && npm run format:check",
     "prepack": "node scripts/build-rtm.js"
   },

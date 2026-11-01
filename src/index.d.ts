@@ -12,6 +12,7 @@ export interface VoiceCleanupReport {
   /** The backend acknowledged stop, or cleanup is unconfirmed. */
   readonly backend: CleanupResult;
   readonly transcripts?: CleanupResult;
+  readonly tools?: CleanupResult;
 }
 
 export interface VoiceState {
@@ -53,7 +54,62 @@ export interface VoiceReservation {
   whip: AgoraConnection;
   lease?: VoiceLease;
   rtm?: AgoraRtmConnection;
+  /** Explicit acknowledgement that local tool delivery is configured. */
+  tools?: boolean;
 }
+
+export type ToolJSON = null | boolean | number | string | ToolJSON[] | { [key: string]: ToolJSON };
+
+/** Supported JSON Schema subset. All object fields must be required. */
+export type VoiceToolSchema = { description?: string } & (
+  | { type: 'string'; enum?: string[]; maxLength?: number }
+  | { type: 'number' | 'integer'; enum?: number[]; minimum?: number; maximum?: number }
+  | { type: 'boolean' }
+  | { type: 'array'; items: VoiceToolSchema; maxItems?: number }
+  | {
+      type: 'object';
+      properties: Record<string, VoiceToolSchema>;
+      required: string[];
+      additionalProperties: false;
+    }
+);
+
+export interface VoiceToolDefinition {
+  /** Case-insensitively unique, starts with a letter, letters/digits only, at most 64 characters. */
+  name: string;
+  description: string;
+  parameters: Extract<VoiceToolSchema, { type: 'object' }>;
+}
+
+export interface VoiceToolContext {
+  readonly callId: string;
+  /** Aborted on stop or after at most five seconds. Check it before any delayed UI change. */
+  readonly signal: AbortSignal;
+  /** Request hangup after the result submission attempt (at most two seconds). */
+  endConversation(): void;
+}
+
+export interface VoiceLocalTool extends VoiceToolDefinition {
+  /** Runs locally. Return JSON to the LLM; the function is never sent to the backend. */
+  execute(
+    arguments_: Record<string, ToolJSON>,
+    context: VoiceToolContext,
+  ): ToolJSON | void | Promise<ToolJSON | void>;
+}
+
+export interface VoiceToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, ToolJSON>;
+  expiresAt: number;
+}
+
+export type VoiceToolResult = { id: string } & (
+  | { ok: true; result: ToolJSON }
+  | { ok: false; error: 'INVALID_ARGUMENTS' | 'EXPIRED' | 'TIMEOUT' | 'EXECUTION_FAILED' }
+);
+
+export type VoiceToolState = 'disabled' | 'connecting' | 'connected' | 'disconnected' | 'closed';
 
 /** A bounded conversation-history message, without word or playback timing. */
 export interface VoiceTranscript {
@@ -125,7 +181,10 @@ export function createAgoraRtmTranscripts(options: {
 
 export interface VoiceBackend {
   /** Reserve credentials only. Do not start the cloud agent here. */
-  createSession(options: { signal: AbortSignal }): Promise<VoiceReservation>;
+  createSession(options: {
+    signal: AbortSignal;
+    tools?: VoiceToolDefinition[];
+  }): Promise<VoiceReservation>;
   startAgent(options: { sessionId: string; signal: AbortSignal }): Promise<unknown>;
   /** Idempotent; must reconcile delayed starts as well as already running agents. */
   stopSession(options: { sessionId: string; signal: AbortSignal }): Promise<unknown>;
@@ -138,9 +197,19 @@ export interface VoiceBackend {
     sessionId: string;
     signal: AbortSignal;
   }): Promise<readonly VoiceTranscript[]>;
+  /** Wait for one call or a bounded heartbeat. Only needed when local tools are registered. */
+  nextToolCall?(options: {
+    sessionId: string;
+    signal: AbortSignal;
+  }): Promise<{ call: VoiceToolCall | null }>;
+  submitToolResult?(
+    options: VoiceToolResult & { sessionId: string; signal: AbortSignal },
+  ): Promise<unknown>;
 }
 
 interface CommonVoiceOptions {
+  /** Definitions are sent at reservation time; execute functions stay in this AIUI Agent. */
+  tools?: VoiceLocalTool[];
   /** Default full-duplex. Half-duplex pauses microphone transmission while the AI replies. */
   microphoneMode?: 'full-duplex' | 'half-duplex';
   /** Optional live RTM text. Managed backend reservations must include rtm credentials. */
@@ -159,6 +228,7 @@ export type AgoraVoiceOptions = CommonVoiceOptions &
           | ((options: { signal: AbortSignal }) => AgoraConnection | Promise<AgoraConnection>);
         backend?: never;
         transcripts?: never;
+        tools?: never;
       }
     | { backend: VoiceBackend; connection?: never }
   );
@@ -189,6 +259,8 @@ export class AgoraVoiceSession extends EventTarget {
   getTranscriptSnapshot(): readonly VoiceTranscript[];
   /** Listen for transcriptstatechange to observe text transport availability. */
   getTranscriptState(): Readonly<VoiceTranscriptState>;
+  /** Listen for toolstatechange. Tool delivery is independent of audio availability. */
+  getToolState(): VoiceToolState;
 }
 
 export function createAgoraVoiceSession(options: AgoraVoiceOptions): AgoraVoiceSession;
@@ -202,7 +274,7 @@ export interface HttpVoiceBackendOptions {
   fetch?: typeof fetch;
 }
 
-/** Implements the bodyless POST protocol described in docs/backend.md. */
+/** Implements the reference backend protocol, including optional local tool delivery. */
 export function createHttpVoiceBackend(options: HttpVoiceBackendOptions): VoiceBackend;
 
 /** The Ink Agent Worker port used by the transcript transport. */

@@ -64,7 +64,7 @@ export function createHttpVoiceBackend({
   const deadline = positiveMilliseconds(timeout, 15_000, 'timeout');
   const root = url.href.replace(/\/$/, '');
 
-  async function request(path, { signal } = {}) {
+  async function request(path, { signal, body } = {}) {
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
@@ -82,7 +82,12 @@ export function createHttpVoiceBackend({
       const response = await acquire(
         fetcher(`${root}/voice/sessions${path}`, {
           method: 'POST',
-          headers: { Authorization: auth, Accept: 'application/json' },
+          headers: {
+            Authorization: auth,
+            Accept: 'application/json',
+            ...(body ? { 'Content-Type': 'application/json' } : {}),
+          },
+          ...(body ? { body: JSON.stringify(body) } : {}),
           redirect: 'error',
           credentials: 'omit',
           cache: 'no-store',
@@ -116,8 +121,11 @@ export function createHttpVoiceBackend({
   }
 
   return Object.freeze({
-    async createSession(options) {
-      const reservation = await request('', options);
+    async createSession({ signal, tools } = {}) {
+      const reservation = await request('', {
+        signal,
+        ...(tools?.length ? { body: { tools } } : {}),
+      });
       if (
         typeof reservation?.id !== 'string' ||
         !reservation.id ||
@@ -136,6 +144,7 @@ export function createHttpVoiceBackend({
       return {
         id,
         lease: reservation.lease,
+        tools: reservation.tools === true,
         ...(reservation.rtm
           ? {
               rtm: {
@@ -198,6 +207,15 @@ export function createHttpVoiceBackend({
     },
     renewSession({ sessionId, signal }) {
       return request(path(sessionId, 'renew'), { signal });
+    },
+    nextToolCall({ sessionId, signal }) {
+      return request(path(sessionId, 'tools/next'), { signal });
+    },
+    async submitToolResult({ sessionId, signal, ...result }) {
+      const reply = await request(path(sessionId, 'tools/result'), { signal, body: result });
+      if (reply?.accepted !== true)
+        throw new AgoraVoiceError('TOOLS', 'The backend did not acknowledge the tool result.');
+      return reply;
     },
     async getTranscripts({ sessionId, signal }) {
       const result = await request(path(sessionId, 'transcripts'), { signal });

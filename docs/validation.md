@@ -54,6 +54,8 @@ does not establish browser CPU offloading. Measure native and Web performance se
 
 ## Real-cloud results
 
+On 2026-11-01, a Shengwang China pipeline and native ink-open were manually tested with voice-triggered local tools. The user confirmed color change and hangup; the relay returned successful tool results and the cloud stop returned HTTP 200. This is one test setup, not validation for every deployment.
+
 As of **2026-10-29**, the tested cloud voice path uses consistent string accounts
 for Ink and the AI. Each has a different UID in the same channel.
 

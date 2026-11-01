@@ -6,14 +6,15 @@ New to voice agents? Start with [what a Voice Agent is](../README.md#what-is-a-v
 then follow the getting started guide. You do not need to understand WHIP or WebRTC
 to run the example.
 
-| Guide                                          | What you will learn                                           |
-| ---------------------------------------------- | ------------------------------------------------------------- |
-| [Getting started](getting-started.md)          | Configure Agora and have your first voice conversation.       |
-| [Add voice to your AIUI Agent](integration.md) | Install the SDK, manage a call, and use existing credentials. |
-| [Backend setup](backend.md)                    | Configure the reference server or implement its session API.  |
-| [API reference](api.md)                        | Look up methods, options, states, and error codes.            |
-| [Troubleshooting](troubleshooting.md)          | Work through connection, microphone, and playback problems.   |
-| [Development and verification](validation.md)  | Run checks and understand the scope of real-cloud testing.    |
+| Guide                                          | What you will learn                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------ |
+| [Local tools](local-tools.md)                  | Let the LLM call functions defined in your AIUI Agent.             |
+| [Getting started](getting-started.md)          | Register with Agora or Shengwang and have your first conversation. |
+| [Add voice to your AIUI Agent](integration.md) | Install the SDK, manage a call, and use existing credentials.      |
+| [Backend setup](backend.md)                    | Configure the reference server or implement its session API.       |
+| [API reference](api.md)                        | Look up methods, options, states, and error codes.                 |
+| [Troubleshooting](troubleshooting.md)          | Work through connection, microphone, and playback problems.        |
+| [Development and verification](validation.md)  | Run checks and understand the scope of real-cloud testing.         |
 
 ## A few useful terms
 
