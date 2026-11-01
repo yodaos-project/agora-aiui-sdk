@@ -21,14 +21,9 @@ Voice Agent 是一个可以用语音交流的 AI 助手。你提出问题，它�
 接入这些能力。AIUI Agent 负责采集声音、播放回答，声网 / Agora Cloud 负责语音识别、
 大模型推理和语音合成。你可以在 AI Studio 中配置助手的角色、语言和声音。
 
-## 可以用来做什么？
+这个 JavaScript SDK 面向 AI 眼镜和 Ink AIUI Agent，提供实时语音、插话和本地界面操作能力。
 
-| 场景         | 用户可以这样说               |
-| ------------ | ---------------------------- |
-| AI 眼镜助手  | “告诉我下一步怎么做。”       |
-| 语言练习     | “陪我练习用英语点一杯咖啡。” |
-| 互动讲解     | “介绍一下这件展品。”         |
-| 产品使用引导 | “带我一步步完成设置。”       |
+[从零运行示例](docs/zh/getting-started.md) · [接入已有 AIUI Agent](docs/zh/integration.md)
 
 ## 从一个语音伙伴开始
 
@@ -50,6 +45,17 @@ Voice Agent 是一个可以用语音交流的 AI 助手。你提出问题，它�
 
 图片截自 ink-open 中的示例，画面为眼镜屏幕尺寸（480 × 352）。
 
+## 可以用来做什么？
+
+| 场景         | 用户可以这样说               |
+| ------------ | ---------------------------- |
+| AI 眼镜助手  | “告诉我下一步怎么做。”       |
+| 语言练习     | “陪我练习用英语点一杯咖啡。” |
+| 互动讲解     | “介绍一下这件展品。”         |
+| 产品使用引导 | “带我一步步完成设置。”       |
+
+## 功能
+
 - **自然对话**：双向语音，支持麦克风和扬声器控制。
 - **随时插话**：宿主具备回声消除或使用耳机时，可以在 AI 回答中打断。
 - **看见识别结果**：你最新说的话在一行中实时更新。
@@ -65,11 +71,16 @@ SDK 还提供 AI 回复文字、音频电平、连接状态和音量控制，方
 
 ## 跑通第一次对话
 
-你需要准备：
+按照[入门指南](docs/zh/getting-started.md)，从注册账号开始运行示例；
+已有 AIUI Agent 的开发者可以直接看[接入指南](docs/zh/integration.md)。
+
+运行示例需要准备：
 
 - Node.js 22+，以及支持麦克风、WHIP 和 Worker 联网的新版 Ink 宿主。
 - 已开通双向 WHIP 和 Signaling（RTM）的声网中国或 Agora 国际站项目。
 - 在 AI Studio 中发布的语音助手，以及它的 `pipelineId`。
+
+启动示例前，需要先配置云端项目、pipeline 和参考后端。
 
 ```sh
 git clone https://github.com/yodaos-project/agora-aiui-sdk.git
@@ -100,7 +111,7 @@ ink-open examples/agent --networking-transport native --permission-checks --them
 
 ## 接入自己的 AIUI Agent
 
-使用 npm 打包的项目，可以从 GitHub 安装：
+目前 SDK 从 GitHub 安装；使用 npm 打包的项目可以执行：
 
 ```sh
 npm install github:yodaos-project/agora-aiui-sdk
@@ -129,6 +140,36 @@ await voice.stop();
 每次通话创建一个新的 session。[接入指南](docs/zh/integration.md)提供完整页面示例，
 包括生命周期和音频控制。需要实时文字时，可以参考[示例 Worker](examples/agent/workers/transcripts.js)。
 
+## 让 AI 操作界面
+
+在 AIUI Agent 中定义动作。例如，让 AI 在用户要求时改变语音球的颜色：
+
+```js
+const voice = createAgoraVoiceSession({
+  backend,
+  tools: [
+    {
+      name: 'setOrbColor',
+      description: 'Change the orb color when the user asks.',
+      parameters: {
+        type: 'object',
+        properties: { color: { type: 'string', enum: ['blue', 'purple', 'green'] } },
+        required: ['color'],
+        additionalProperties: false,
+      },
+      execute: ({ color }) => {
+        this.setData({ orbColor: color });
+        return { color };
+      },
+    },
+  ],
+});
+```
+
+将这段代码放在页面方法中，并在页面数据和视图中声明、绑定 `orbColor`。
+函数在本地执行；参考后端通过 HTTPS 转发云端调用。
+配置方法和完整示例见[本地工具指南](docs/zh/local-tools.md)。
+
 ## 它们如何协作？
 
 | 组成部分           | 负责什么                          |
@@ -148,6 +189,12 @@ await voice.stop();
 
 macOS 示例已连接真实 Agora 和声网中国，验证语音对话；声网测试还验证了语音改色和挂断。
 用户确认说话和插话均流畅；性能数据和各宿主的验证范围见[验证记录](docs/zh/validation.md#真实云端验证)。
+
+| 宿主           | 已验证范围                                           |
+| -------------- | ---------------------------------------------------- |
+| macOS ink-open | 真实云端语音和插话；声网语音改色、挂断。             |
+| Ink Web        | 虚拟麦克风输入与云端音频；该测试未验证真实设备听音。 |
+| Android / 眼镜 | 本 SDK 的云端 AI 通话仍需物理设备验收。              |
 
 原生 Ink 会用独立线程运行 RTM Worker。Ink Web 的 Worker realm 目前仍共享浏览器主事件循环，
 Web 性能需要单独验证。没有回声消除的宿主请使用耳机，或改用[轮流说话模式](docs/zh/api.md#轮流说话)。
@@ -170,6 +217,7 @@ Web 性能需要单独验证。没有回声消除的宿主请使用耳机，或�
 
 问题、建议和反馈，欢迎提交到 [GitHub Issues](https://github.com/yodaos-project/agora-aiui-sdk/issues)。
 请附上 Ink 宿主、SDK 版本和简短复现步骤，去掉凭证信息。
+欢迎参与设备验证、AIUI 示例和文档翻译。
 
 ```sh
 npm ci

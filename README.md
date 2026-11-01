@@ -23,14 +23,10 @@ well for AI glasses, language practice, interactive guides, and step-by-step hel
 plays replies; Agora or Shengwang Cloud provides speech recognition, the language model, and
 the AI's voice. Configure its personality, language, and voice in Agora Agent Studio.
 
-## What you can build
+Built for AI glasses and Ink AIUI Agents, this JavaScript SDK brings together
+real-time voice, interruption, and locally executed interface actions.
 
-| Use case             | Try saying…                           |
-| -------------------- | ------------------------------------- |
-| AI glasses assistant | “Tell me what to do next.”            |
-| Language practice    | “Help me practice ordering a coffee.” |
-| Interactive guide    | “Tell me more about this exhibit.”    |
-| Product onboarding   | “Walk me through setting this up.”    |
+[Run the example from scratch](docs/getting-started.md) · [Add voice to your AIUI Agent](docs/integration.md)
 
 ## A conversation, ready to adapt
 
@@ -51,6 +47,17 @@ or `shengwang` for Chinese and **声网 Cloud**, in the example configuration.
 
 Screenshots captured from the example in ink-open at the glasses display size (480 × 352).
 
+## What you can build
+
+| Use case             | Try saying…                           |
+| -------------------- | ------------------------------------- |
+| AI glasses assistant | “Tell me what to do next.”            |
+| Language practice    | “Help me practice ordering a coffee.” |
+| Interactive guide    | “Tell me more about this exhibit.”    |
+| Product onboarding   | “Walk me through setting this up.”    |
+
+## Features
+
 - **Speak naturally.** Two-way audio with microphone and speaker controls.
 - **Interrupt the reply.** Full-duplex conversation on hosts with echo cancellation or with headphones.
 - **See what was heard.** Your latest recognized speech updates in a single line.
@@ -66,11 +73,17 @@ loaded by the example's Worker. JavaScript modules and TypeScript declarations a
 
 ## Run your first conversation
 
-You will need:
+To try the included example, follow the [step-by-step guide](docs/getting-started.md)
+from account registration through your first conversation. To add voice to an existing
+AIUI Agent, use the [integration guide](docs/integration.md) instead.
+
+For the example, you will need:
 
 - Node.js 22+ and a recent Ink host with microphone, WHIP, and Worker networking support.
 - An Agora or Shengwang project enabled for duplex WHIP and Signaling (RTM).
 - A published voice agent in AI Studio and its `pipelineId`.
+
+The cloud project, pipeline, and reference backend must be configured before starting the example.
 
 ```sh
 git clone https://github.com/yodaos-project/agora-aiui-sdk.git
@@ -101,7 +114,7 @@ tap **Resume**.
 
 ## Add voice to your AIUI Agent
 
-For a project with an npm bundler:
+The SDK is currently installed from GitHub. For a project with an npm bundler:
 
 ```sh
 npm install github:yodaos-project/agora-aiui-sdk
@@ -131,6 +144,37 @@ Create a new session for each call. The [integration guide](docs/integration.md)
 shows a complete page with lifecycle handling and audio controls. Use the
 [example Worker](examples/agent/workers/transcripts.js) to add live text.
 
+## Let the AI act on your interface
+
+Define actions alongside your AIUI Agent. For example, the AI can change an orb's
+color when a user asks:
+
+```js
+const voice = createAgoraVoiceSession({
+  backend,
+  tools: [
+    {
+      name: 'setOrbColor',
+      description: 'Change the orb color when the user asks.',
+      parameters: {
+        type: 'object',
+        properties: { color: { type: 'string', enum: ['blue', 'purple', 'green'] } },
+        required: ['color'],
+        additionalProperties: false,
+      },
+      execute: ({ color }) => {
+        this.setData({ orbColor: color });
+        return { color };
+      },
+    },
+  ],
+});
+```
+
+Use this inside a page method with `orbColor` declared and bound to the view.
+Functions run locally; the reference backend relays cloud calls over HTTPS.
+See [local tools](docs/local-tools.md) for setup and the complete example.
+
 ## How it works
 
 | Piece                   | Responsibility                                              |
@@ -152,6 +196,12 @@ uses different string UIDs for the AIUI Agent and the cloud AI.
 The macOS example has been tested with real Agora and Shengwang audio, live ASR, interruptions,
 and repeated connect/stop cycles. The user confirmed fluent speech and interruptions;
 Shengwang voice-controlled color and hangup were also verified. Measurements and host-specific results are in [verification notes](docs/validation.md#real-cloud-results).
+
+| Host              | What has been verified                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| macOS ink-open    | Real cloud conversation and interruptions; Shengwang local color and hangup tools.          |
+| Ink Web           | Cloud audio with virtual microphone input; physical listening not established by this test. |
+| Android / glasses | Cloud AI acceptance for this SDK is still needed on a physical device.                      |
 
 Native Ink runs the RTM Worker on a separate thread. Ink Web currently shares its
 browser event loop with the Worker realm; measure Web performance separately.
@@ -176,6 +226,7 @@ synchronized to playback are outside the current API.
 
 Questions, bugs, and ideas are welcome in [GitHub Issues](https://github.com/yodaos-project/agora-aiui-sdk/issues).
 Include your Ink host, SDK version, and a short reproduction without credentials.
+Contributions are welcome in device validation, AIUI examples, and translations.
 
 ```sh
 npm ci
