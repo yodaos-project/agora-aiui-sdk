@@ -37,6 +37,19 @@ Voice Agent 是一个可以用语音交流的 AI 助手。你提出问题，它�
 界面和 **声网 Cloud**。
 你可以直接体验，也可以改造成自己的 AIUI Agent。
 
+<table>
+  <tr>
+    <td><img src="docs/images/voice-agent-zh.png" alt="声网中文版语音助手准备开始对话" width="480"></td>
+    <td><img src="docs/images/voice-agent-en.png" alt="Agora 英文版语音助手准备开始对话" width="480"></td>
+  </tr>
+  <tr>
+    <td align="center">声网 · 中文</td>
+    <td align="center">Agora · English</td>
+  </tr>
+</table>
+
+图片截自 ink-open 中的示例，画面为眼镜屏幕尺寸（480 × 352）。
+
 - **自然对话**：双向语音，支持麦克风和扬声器控制。
 - **随时插话**：宿主具备回声消除或使用耳机时，可以在 AI 回答中打断。
 - **看见识别结果**：你最新说的话在一行中实时更新。

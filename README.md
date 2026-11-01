@@ -38,6 +38,19 @@ The included example is a compact voice companion designed for color and
 green-only glasses displays. Choose `agora` for English and **Agora Cloud**,
 or `shengwang` for Chinese and **声网 Cloud**, in the example configuration.
 
+<table>
+  <tr>
+    <td><img src="docs/images/voice-agent-en.png" alt="English voice agent ready to start a conversation" width="480"></td>
+    <td><img src="docs/images/voice-agent-zh.png" alt="Chinese voice agent ready to start a conversation" width="480"></td>
+  </tr>
+  <tr>
+    <td align="center">Agora · English</td>
+    <td align="center">声网 · 中文</td>
+  </tr>
+</table>
+
+Screenshots captured from the example in ink-open at the glasses display size (480 × 352).
+
 - **Speak naturally.** Two-way audio with microphone and speaker controls.
 - **Interrupt the reply.** Full-duplex conversation on hosts with echo cancellation or with headphones.
 - **See what was heard.** Your latest recognized speech updates in a single line.
