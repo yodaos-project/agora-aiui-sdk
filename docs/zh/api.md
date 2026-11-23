@@ -14,14 +14,17 @@ const voice = createAgoraVoiceSession({ backend, timeout: 30000 });
 `createAgoraVoiceSession(options)` 返回 `AgoraVoiceSession`，它继承 `EventTarget`。
 使用 `new AgoraVoiceSession(options)` 也一样。`backend` 与 `connection` 必须且只能选择一个。
 
-| 参数             | 含义                                                                   | 默认值        |
-| ---------------- | ---------------------------------------------------------------------- | ------------- |
-| `tools`          | 本地工具定义及执行函数，需要后端支持。见[本地工具](local-tools.md)。   | `[]`          |
-| `backend`        | 实现 `VoiceBackend` 的对象，负责预留凭证、启停 AI。                    | —             |
-| `connection`     | `AgoraConnection`，或 `async ({ signal }) => connection`，只连接音频。 | —             |
-| `timeout`        | 启动全过程的超时时间，单位毫秒。                                       | `15000`       |
-| `cleanupTimeout` | 每项独立清理操作的超时时间，单位毫秒。                                 | `5000`        |
-| `microphoneMode` | `full-duplex`，或在 AI 回答时暂停收音的 `half-duplex`。                | `full-duplex` |
+| 参数             | 含义                                                                                    | 默认值        |
+| ---------------- | --------------------------------------------------------------------------------------- | ------------- |
+| `tools`          | 本地工具定义及执行函数，需要后端支持。见[本地工具](local-tools.md)。                    | `[]`          |
+| `backend`        | 实现 `VoiceBackend` 的对象，负责预留凭证、启停 AI。                                     | —             |
+| `connection`     | `AgoraConnection`，或 `async ({ signal }) => connection`，只连接音频。                  | —             |
+| `timeout`        | 启动全过程的超时时间，单位毫秒。                                                        | `15000`       |
+| `cleanupTimeout` | 每项独立清理操作的超时时间，单位毫秒。                                                  | `5000`        |
+| `microphoneMode` | `full-duplex`，或在 AI 回答时暂停收音的 `half-duplex`。                                 | `full-duplex` |
+| `audioProfile`   | `default` 使用宿主默认设置，`low-bandwidth` 将麦克风上行媒体载荷上限设为 24,000 bit/s。 | `default`     |
+
+眼镜示例在 `configuration.js` 中选择 `low-bandwidth`。该设置只作用于麦克风发送轨道，蓝牙代理和协议封装会产生额外开销。原生 Ink 宿主需包含[发送码率支持](https://github.com/jsar-project/ink/commit/e3b0fb29a3d3d7697ce96fc04ac0d97e342baa0b)，更早的构建会忽略该设置，使用宿主默认码率。
 
 超时时间必须是有限正数。SDK 管理自己创建的麦克风轨道和音频上下文，
 当前版本不接收调用方提供的媒体流或音频上下文。

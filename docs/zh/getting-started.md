@@ -128,6 +128,7 @@ export default {
   backendURL: 'http://127.0.0.1:8787',
   localTools: false,
   microphoneMode: 'full-duplex',
+  audioProfile: 'low-bandwidth',
   async authorization() {
     return 'Bearer paste-the-same-BACKEND_API_TOKEN-here';
   },

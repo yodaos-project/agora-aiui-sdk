@@ -59,6 +59,22 @@ test('direct media uses the merged WHIP API and owns its capture and graph', asy
   assert(!JSON.stringify(voice.getState()).includes(connection.token));
 });
 
+test('audioProfile configures the outgoing microphone encoding', async (t) => {
+  const runtime = fakeRuntime(t);
+  for (const audioProfile of [undefined, 'default', 'low-bandwidth']) {
+    const voice = createAgoraVoiceSession({ connection, audioProfile });
+    try {
+      await voice.start();
+      const expected = { direction: 'sendrecv', streams: [runtime.streams.at(-1)] };
+      if (audioProfile === 'low-bandwidth') expected.sendEncodings = [{ maxBitrate: 24_000 }];
+      assert.deepEqual(runtime.whips.at(-1).peerConnection.transceiverInit, expected);
+    } finally {
+      await voice.stop();
+    }
+  }
+  assert.throws(() => createAgoraVoiceSession({ connection, audioProfile: 'invalid' }), TypeError);
+});
+
 test('managed start reserves first and starts bot only after media connects', async (t) => {
   const runtime = fakeRuntime(t);
   const voice = createAgoraVoiceSession({ backend: backend(runtime) });

@@ -24,6 +24,9 @@ or `connection`.
 | `timeout`        | Total startup deadline in milliseconds.                                                                         | `15000`       |
 | `cleanupTimeout` | Deadline for each independent cleanup operation, in milliseconds.                                               | `5000`        |
 | `microphoneMode` | `full-duplex`, or `half-duplex` to pause microphone transmission during AI replies.                             | `full-duplex` |
+| `audioProfile`   | `default` uses host settings. `low-bandwidth` requests a 24,000 bit/s microphone payload limit.                 | `default`     |
+
+The glasses example selects `low-bandwidth` in `configuration.js`. This setting applies only to the outgoing microphone track. Protocol and Bluetooth proxy overhead consume additional bandwidth. Native hosts need [Ink sender bitrate support](https://github.com/jsar-project/ink/commit/e3b0fb29a3d3d7697ce96fc04ac0d97e342baa0b). Earlier builds ignore the setting and use the host default.
 
 Both deadlines must be positive finite numbers. The session owns the microphone
 tracks and audio context it creates; this version does not accept caller-provided

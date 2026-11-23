@@ -32,6 +32,7 @@ const backend = createHttpVoiceBackend({
 });
 const session = createAgoraVoiceSession({
   backend,
+  audioProfile: 'low-bandwidth',
   tools: [
     {
       name: 'endConversation',
