@@ -61,13 +61,20 @@ test('direct media uses the merged WHIP API and owns its capture and graph', asy
 
 test('audioProfile configures the outgoing microphone encoding', async (t) => {
   const runtime = fakeRuntime(t);
-  for (const audioProfile of [undefined, 'default', 'low-bandwidth']) {
-    const voice = createAgoraVoiceSession({ connection, audioProfile });
+  const limited = { sendEncodings: [{ maxBitrate: 24_000 }] };
+  for (const [options, encoding] of [
+    [{}, limited],
+    [{ audioProfile: 'low-bandwidth' }, limited],
+    [{ audioProfile: 'default' }, {}],
+  ]) {
+    const voice = createAgoraVoiceSession({ connection, ...options });
     try {
       await voice.start();
-      const expected = { direction: 'sendrecv', streams: [runtime.streams.at(-1)] };
-      if (audioProfile === 'low-bandwidth') expected.sendEncodings = [{ maxBitrate: 24_000 }];
-      assert.deepEqual(runtime.whips.at(-1).peerConnection.transceiverInit, expected);
+      assert.deepEqual(runtime.whips.at(-1).peerConnection.transceiverInit, {
+        direction: 'sendrecv',
+        streams: [runtime.streams.at(-1)],
+        ...encoding,
+      });
     } finally {
       await voice.stop();
     }

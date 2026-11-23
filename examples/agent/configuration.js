@@ -9,7 +9,7 @@ export default {
   localTools: false,
   // Use a host with echo cancellation or headphones. Otherwise use 'half-duplex'.
   microphoneMode: 'full-duplex',
-  // Cap microphone audio at 24 kb/s on supported Ink hosts for Bluetooth-proxied glasses.
+  // Defaults to a 24 kb/s microphone cap on supported hosts. Use 'default' for host settings.
   audioProfile: 'low-bandwidth',
   async authorization() {
     // Replace this with your application's short-lived signed-in user credential.
