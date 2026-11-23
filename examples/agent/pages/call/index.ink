@@ -106,6 +106,7 @@
       const voice = createAgoraVoiceSession({
         backend: this.backend,
         timeout: 45000,
+        audioProfile: configuration.audioProfile,
         transcripts: this.transcriptSource,
         microphoneMode: configuration.microphoneMode ?? 'full-duplex',
         ...(configuration.localTools ? {

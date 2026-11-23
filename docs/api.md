@@ -16,14 +16,17 @@ const voice = createAgoraVoiceSession({ backend, timeout: 30000 });
 `new AgoraVoiceSession(options)` is equivalent. Choose exactly one of `backend`
 or `connection`.
 
-| Option           | Meaning                                                                                                         | Default       |
-| ---------------- | --------------------------------------------------------------------------------------------------------------- | ------------- |
-| `tools`          | Local tool definitions and execute functions; requires a compatible backend. See [Local tools](local-tools.md). | `[]`          |
-| `backend`        | A `VoiceBackend` that reserves credentials and starts/stops the AI.                                             | —             |
-| `connection`     | An `AgoraConnection`, or `async ({ signal }) => connection`. Connects audio only.                               | —             |
-| `timeout`        | Total startup deadline in milliseconds.                                                                         | `15000`       |
-| `cleanupTimeout` | Deadline for each independent cleanup operation, in milliseconds.                                               | `5000`        |
-| `microphoneMode` | `full-duplex`, or `half-duplex` to pause microphone transmission during AI replies.                             | `full-duplex` |
+| Option           | Meaning                                                                                                         | Default         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- | --------------- |
+| `tools`          | Local tool definitions and execute functions; requires a compatible backend. See [Local tools](local-tools.md). | `[]`            |
+| `backend`        | A `VoiceBackend` that reserves credentials and starts/stops the AI.                                             | —               |
+| `connection`     | An `AgoraConnection`, or `async ({ signal }) => connection`. Connects audio only.                               | —               |
+| `timeout`        | Total startup deadline in milliseconds.                                                                         | `15000`         |
+| `cleanupTimeout` | Deadline for each independent cleanup operation, in milliseconds.                                               | `5000`          |
+| `microphoneMode` | `full-duplex`, or `half-duplex` to pause microphone transmission during AI replies.                             | `full-duplex`   |
+| `audioProfile`   | `default` uses host settings. `low-bandwidth` requests a 24,000 bit/s microphone payload limit.                 | `low-bandwidth` |
+
+The glasses example selects `low-bandwidth` in `configuration.js`. This setting applies only to the outgoing microphone track. Protocol and Bluetooth proxy overhead consume additional bandwidth. Native hosts need [Ink sender bitrate support](https://github.com/jsar-project/ink/commit/e3b0fb29a3d3d7697ce96fc04ac0d97e342baa0b). Earlier builds ignore the setting and use the host default.
 
 Both deadlines must be positive finite numbers. The session owns the microphone
 tracks and audio context it creates; this version does not accept caller-provided

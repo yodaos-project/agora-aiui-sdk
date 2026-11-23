@@ -60,7 +60,10 @@ export class AgoraVoiceSession extends EventTarget {
       !['full-duplex', 'half-duplex'].includes(options.microphoneMode)
     )
       throw new TypeError('microphoneMode must be full-duplex or half-duplex.');
-    this._options = { ...options };
+    const { audioProfile = 'low-bandwidth' } = options;
+    if (!['default', 'low-bandwidth'].includes(audioProfile))
+      throw new TypeError('audioProfile must be default or low-bandwidth.');
+    this._options = { ...options, audioProfile };
     delete this._options.tools;
     this._timeout = positiveMilliseconds(options.timeout, 15_000, 'timeout');
     this._cleanupTimeout = positiveMilliseconds(options.cleanupTimeout, 5_000, 'cleanupTimeout');
@@ -222,7 +225,10 @@ export class AgoraVoiceSession extends EventTarget {
       this._buildLocalAudio();
       if (this._options.microphoneMode === 'half-duplex')
         this._microphoneGateTimer = setInterval(() => this._refreshMicrophoneGate(), 100);
-      pc.addTransceiver(track, { direction: 'sendrecv', streams: [this._stream] });
+      const transceiverInit = { direction: 'sendrecv', streams: [this._stream] };
+      if (this._options.audioProfile === 'low-bandwidth')
+        transceiverInit.sendEncodings = [{ maxBitrate: 24_000 }];
+      pc.addTransceiver(track, transceiverInit);
 
       step = 'MEDIA';
       await acquire(this._whip.connect({ signal, timeout: this._timeout }), signal);

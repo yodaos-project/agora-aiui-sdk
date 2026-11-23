@@ -86,6 +86,7 @@ export function fakeRuntime(t, overrides = {}) {
     iceConnectionState = 'new';
     addTransceiver(track, options) {
       this.track = track;
+      this.transceiverInit = options;
       assert.equal(options.direction, 'sendrecv');
     }
     async getStats() {
