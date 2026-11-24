@@ -24,7 +24,9 @@ or `connection`.
 | `timeout`        | Total startup deadline in milliseconds.                                                                         | `15000`         |
 | `cleanupTimeout` | Deadline for each independent cleanup operation, in milliseconds.                                               | `5000`          |
 | `microphoneMode` | `full-duplex`, or `half-duplex` to pause microphone transmission during AI replies.                             | `full-duplex`   |
-| `audioProfile`   | `default` uses host settings. `low-bandwidth` requests a 24,000 bit/s microphone payload limit.                 | `low-bandwidth` |
+| `audioProfile`   | Microphone profile: `default` (host settings), `low-bandwidth` (24 kb/s), or `very-low-bandwidth` (16 kb/s).    | `low-bandwidth` |
+
+For tighter links, set `audioProfile` to `very-low-bandwidth` in the example or SDK. It requests 16 kHz mono microphone capture when supported and caps the outgoing Opus payload at 16,000 bit/s on supported hosts. The downlink and the 48 kHz Opus RTP clock stay the same.
 
 The glasses example selects `low-bandwidth` in `configuration.js`. This setting applies only to the outgoing microphone track. Protocol and Bluetooth proxy overhead consume additional bandwidth. Native hosts need [Ink sender bitrate support](https://github.com/jsar-project/ink/commit/e3b0fb29a3d3d7697ce96fc04ac0d97e342baa0b). Earlier builds ignore the setting and use the host default.
 

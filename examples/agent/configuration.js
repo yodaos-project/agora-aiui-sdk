@@ -9,7 +9,8 @@ export default {
   localTools: false,
   // Use a host with echo cancellation or headphones. Otherwise use 'half-duplex'.
   microphoneMode: 'full-duplex',
-  // Defaults to a 24 kb/s microphone cap on supported hosts. Use 'default' for host settings.
+  // 'low-bandwidth': 24 kb/s uplink. 'very-low-bandwidth': 16 kHz preferred capture, 16 kb/s uplink.
+  // Use 'default' for host settings.
   audioProfile: 'low-bandwidth',
   async authorization() {
     // Replace this with your application's short-lived signed-in user credential.

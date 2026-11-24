@@ -208,8 +208,8 @@ export interface VoiceBackend {
 }
 
 interface CommonVoiceOptions {
-  /** Defaults to 'low-bandwidth' (24,000 bit/s uplink). Select 'default' to use the host settings. */
-  audioProfile?: 'default' | 'low-bandwidth';
+  /** Defaults to 24 kb/s uplink. 'very-low-bandwidth' requests 16 kHz capture and 16 kb/s uplink. */
+  audioProfile?: 'default' | 'low-bandwidth' | 'very-low-bandwidth';
   /** Definitions are sent at reservation time; execute functions stay in this AIUI Agent. */
   tools?: VoiceLocalTool[];
   /** Default full-duplex. Half-duplex pauses microphone transmission while the AI replies. */
