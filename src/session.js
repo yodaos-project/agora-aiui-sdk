@@ -10,8 +10,20 @@ import {
   positiveMilliseconds,
 } from './errors.js';
 
-const CAPTURE = {
-  audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+const MICROPHONE = {
+  channelCount: 1,
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
+
+const AUDIO_PROFILES = {
+  default: { audio: MICROPHONE },
+  'low-bandwidth': { audio: MICROPHONE, maxBitrate: 24_000 },
+  'ultralow-bandwidth': {
+    audio: { ...MICROPHONE, sampleRate: { ideal: 16_000 } },
+    maxBitrate: 16_000,
+  },
 };
 
 function stopTracks(stream) {
@@ -61,8 +73,8 @@ export class AgoraVoiceSession extends EventTarget {
     )
       throw new TypeError('microphoneMode must be full-duplex or half-duplex.');
     const { audioProfile = 'low-bandwidth' } = options;
-    if (!['default', 'low-bandwidth'].includes(audioProfile))
-      throw new TypeError('audioProfile must be default or low-bandwidth.');
+    if (typeof audioProfile !== 'string' || !Object.hasOwn(AUDIO_PROFILES, audioProfile))
+      throw new TypeError('audioProfile must be default, low-bandwidth or ultralow-bandwidth.');
     this._options = { ...options, audioProfile };
     delete this._options.tools;
     this._timeout = positiveMilliseconds(options.timeout, 15_000, 'timeout');
@@ -201,8 +213,9 @@ export class AgoraVoiceSession extends EventTarget {
       checkSignal(signal);
 
       step = 'MICROPHONE';
+      const { audio, maxBitrate } = AUDIO_PROFILES[this._options.audioProfile];
       await acquire(
-        navigator.mediaDevices.getUserMedia(CAPTURE),
+        navigator.mediaDevices.getUserMedia({ audio }),
         signal,
         (stream) => {
           this._stream = stream;
@@ -226,8 +239,7 @@ export class AgoraVoiceSession extends EventTarget {
       if (this._options.microphoneMode === 'half-duplex')
         this._microphoneGateTimer = setInterval(() => this._refreshMicrophoneGate(), 100);
       const transceiverInit = { direction: 'sendrecv', streams: [this._stream] };
-      if (this._options.audioProfile === 'low-bandwidth')
-        transceiverInit.sendEncodings = [{ maxBitrate: 24_000 }];
+      if (maxBitrate !== undefined) transceiverInit.sendEncodings = [{ maxBitrate }];
       pc.addTransceiver(track, transceiverInit);
 
       step = 'MEDIA';

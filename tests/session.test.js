@@ -59,17 +59,26 @@ test('direct media uses the merged WHIP API and owns its capture and graph', asy
   assert(!JSON.stringify(voice.getState()).includes(connection.token));
 });
 
-test('audioProfile configures the outgoing microphone encoding', async (t) => {
+test('audioProfile configures microphone capture and outgoing encoding', async (t) => {
   const runtime = fakeRuntime(t);
+  const capture = t.mock.method(navigator.mediaDevices, 'getUserMedia');
   const limited = { sendEncodings: [{ maxBitrate: 24_000 }] };
-  for (const [options, encoding] of [
+  for (const [options, encoding, captureRate] of [
     [{}, limited],
     [{ audioProfile: 'low-bandwidth' }, limited],
+    [
+      { audioProfile: 'ultralow-bandwidth' },
+      { sendEncodings: [{ maxBitrate: 16_000 }] },
+      { ideal: 16_000 },
+    ],
     [{ audioProfile: 'default' }, {}],
   ]) {
     const voice = createAgoraVoiceSession({ connection, ...options });
     try {
       await voice.start();
+      const { audio } = capture.mock.calls.at(-1).arguments[0];
+      assert.equal(audio.channelCount, 1);
+      assert.deepEqual(audio.sampleRate, captureRate);
       assert.deepEqual(runtime.whips.at(-1).peerConnection.transceiverInit, {
         direction: 'sendrecv',
         streams: [runtime.streams.at(-1)],
