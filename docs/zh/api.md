@@ -22,9 +22,9 @@ const voice = createAgoraVoiceSession({ backend, timeout: 30000 });
 | `timeout`        | 启动全过程的超时时间，单位毫秒。                                          | `15000`         |
 | `cleanupTimeout` | 每项独立清理操作的超时时间，单位毫秒。                                    | `5000`          |
 | `microphoneMode` | `full-duplex`，或在 AI 回答时暂停收音的 `half-duplex`。                   | `full-duplex`   |
-| `audioProfile`   | `default` 随宿主，`low-bandwidth` 24 kb/s，`very-low-bandwidth` 16 kb/s。 | `low-bandwidth` |
+| `audioProfile`   | `default` 随宿主，`low-bandwidth` 24 kb/s，`ultralow-bandwidth` 16 kb/s。 | `low-bandwidth` |
 
-链路带宽更低时，可以在示例或 SDK 中将 `audioProfile` 设为 `very-low-bandwidth`。该档位优先请求 16 kHz 单声道麦克风采集，在支持发送码率控制的宿主上将 Opus 上行载荷限制为 16,000 bit/s。下行音频和 Opus 的 48 kHz RTP 时钟保持原有设置。
+链路带宽更低时，可以在示例或 SDK 中将 `audioProfile` 设为 `ultralow-bandwidth`。该档位优先请求 16 kHz 单声道麦克风采集，在支持发送码率控制的宿主上将 Opus 上行载荷限制为 16,000 bit/s。下行音频和 Opus 的 48 kHz RTP 时钟保持原有设置。
 
 眼镜示例在 `configuration.js` 中选择 `low-bandwidth`。该设置只作用于麦克风发送轨道，蓝牙代理和协议封装会产生额外开销。原生 Ink 宿主需包含[发送码率支持](https://github.com/jsar-project/ink/commit/e3b0fb29a3d3d7697ce96fc04ac0d97e342baa0b)，更早的构建会忽略该设置，使用宿主默认码率。
 

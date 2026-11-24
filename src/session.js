@@ -20,7 +20,7 @@ const MICROPHONE = {
 const AUDIO_PROFILES = {
   default: { audio: MICROPHONE },
   'low-bandwidth': { audio: MICROPHONE, maxBitrate: 24_000 },
-  'very-low-bandwidth': {
+  'ultralow-bandwidth': {
     audio: { ...MICROPHONE, sampleRate: { ideal: 16_000 } },
     maxBitrate: 16_000,
   },
@@ -74,7 +74,7 @@ export class AgoraVoiceSession extends EventTarget {
       throw new TypeError('microphoneMode must be full-duplex or half-duplex.');
     const { audioProfile = 'low-bandwidth' } = options;
     if (typeof audioProfile !== 'string' || !Object.hasOwn(AUDIO_PROFILES, audioProfile))
-      throw new TypeError('audioProfile must be default, low-bandwidth or very-low-bandwidth.');
+      throw new TypeError('audioProfile must be default, low-bandwidth or ultralow-bandwidth.');
     this._options = { ...options, audioProfile };
     delete this._options.tools;
     this._timeout = positiveMilliseconds(options.timeout, 15_000, 'timeout');

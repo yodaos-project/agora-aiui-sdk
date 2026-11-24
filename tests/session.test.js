@@ -67,7 +67,7 @@ test('audioProfile configures microphone capture and outgoing encoding', async (
     [{}, limited],
     [{ audioProfile: 'low-bandwidth' }, limited],
     [
-      { audioProfile: 'very-low-bandwidth' },
+      { audioProfile: 'ultralow-bandwidth' },
       { sendEncodings: [{ maxBitrate: 16_000 }] },
       { ideal: 16_000 },
     ],
